@@ -61,16 +61,16 @@
                         {% endif %}
                     </div>
                     
-                    <div class="form-group" id="team_select_div_user"> {# ID für eventuelles JS-Targeting #}
-                        {{ form.team_id.label(class="form-control-label") }}
-                        {{ form.team_id(class="form-control custom-select " + ("is-invalid" if form.team_id.errors else "")) }}
-                        <small class="form-text text-muted">Nur relevant, wenn Rolle 'Teamleiter' ist und ein Team zugewiesen werden soll.</small>
-                        {% if form.team_id.errors %}
-                            <div class="invalid-feedback">
-                                {% for error in form.team_id.errors %}<span>{{ error }}</span>{% endfor %}
-                            </div>
-                        {% endif %}
-                    </div>
+                    <div class="form-group" id="team_select_div_user_edit"> {# ID bleibt gleich für JS #}
+    {{ form.team_ids.label(class="form-control-label") }}
+    {{ form.team_ids(class="form-control custom-select " + ("is-invalid" if form.team_ids.errors else ""), multiple=True, size=5) }}
+    <small class="form-text text-muted">Nur relevant, wenn Rolle 'Teamleiter' ist. Halte Strg (Cmd) für Mehrfachauswahl.</small>
+    {% if form.team_ids.errors %}
+        <div class="invalid-feedback">
+            {% for error in form.team_ids.errors %}<span>{{ error }}</span>{% endfor %}
+        </div>
+    {% endif %}
+</div>
 
                     <div class="form-group">
                         {{ form.submit(class="btn telekom-button") }}
