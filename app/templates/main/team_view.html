@@ -181,11 +181,11 @@
                         <p class="stat-value mb-0">{{ team.name }}</p>
                     </div>
                     <div class="col-md-4 mb-2 mb-md-0">
-                        <strong class="stat-label">Teamleiter:</strong>
-                        <p class="stat-value mb-0">
-                            {{ team.team_leader.username if team.team_leader else '-' }}
-                        </p>
-                    </div>
+    <strong class="stat-label">Teamleiter:</strong>
+    <p class="stat-value mb-0">
+        {{ team.leaders|map(attribute='username')|join(', ') or '-' }}
+    </p>
+</div>
                     <div class="col-md-4">
                         <strong class="stat-label">Anzahl Mitglieder:</strong>
                         <p class="stat-value mb-0">{{ team.members.count() }}</p>
