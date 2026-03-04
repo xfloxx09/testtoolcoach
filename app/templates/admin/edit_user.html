@@ -81,4 +81,23 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var roleSelect = document.getElementById('role');
+    var teamDiv = document.getElementById('team_select_div_user_edit'); // oder create_user entsprechend
+    function toggleTeamSelect() {
+        if (roleSelect.value === 'Teamleiter') {
+            teamDiv.style.display = 'block';
+        } else {
+            teamDiv.style.display = 'none';
+        }
+    }
+    if (roleSelect && teamDiv) {
+        roleSelect.addEventListener('change', toggleTeamSelect);
+        toggleTeamSelect(); // Initialzustand
+    }
+});
+</script>
+
 {% endblock %}
