@@ -2,8 +2,8 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, abort, current_app, jsonify
 from flask_login import login_required, current_user
 from app import db
-from app.models import User, Team, TeamMember, Coaching, Workshop, workshop_participants  # NEU: Workshop-Modelle
-from app.forms import CoachingForm, ProjectLeaderNoteForm, PasswordChangeForm, WorkshopForm  # NEU: WorkshopForm
+from app.models import User, Team, TeamMember, Coaching, Workshop, workshop_participants
+from app.forms import CoachingForm, ProjectLeaderNoteForm, PasswordChangeForm, WorkshopForm
 from app.utils import role_required, ROLE_ADMIN, ROLE_PROJEKTLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_TEAMLEITER, ROLE_ABTEILUNGSLEITER, ARCHIV_TEAM_NAME
 from sqlalchemy import desc, func, or_, and_
 from datetime import datetime, timedelta, timezone
@@ -90,7 +90,6 @@ def get_coaching_subject_distribution(period_filter_str=None, selected_team_id_s
 
 # --- ROUTEN ---
 
-# NEUE AUSWAHLSEITE (Startseite)
 @bp.route('/')
 @bp.route('/index')
 @login_required
@@ -98,7 +97,7 @@ def index():
     # Auswahlseite: zwei große Buttons
     return render_template('main/index_choice.html', config=current_app.config)
 
-# VERSCHOBENES COACHING-DASHBOARD (vorher index)
+
 @bp.route('/coaching-dashboard')
 @login_required
 def coaching_dashboard():
@@ -174,6 +173,7 @@ def coaching_dashboard():
                            month_options=m_opts,
                            config=current_app.config)
 
+
 @bp.route('/team_view', methods=['GET'])
 @login_required
 @role_required([ROLE_TEAMLEITER, ROLE_ADMIN, ROLE_PROJEKTLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_ABTEILUNGSLEITER])
@@ -244,6 +244,7 @@ def team_view():
                            all_teams_list=all_teams_for_dropdown,
                            config=current_app.config)
 
+
 @bp.route('/coaching/add', methods=['GET', 'POST'])
 @login_required
 @role_required([ROLE_TEAMLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_ADMIN])
@@ -290,7 +291,7 @@ def add_coaching():
     tcap_js = "document.addEventListener('DOMContentLoaded',function(){var s=document.getElementById('coaching_style'),t=document.getElementById('tcap_id_field'),i=document.getElementById('tcap_id');function o(){if(s&&t&&i)if(s.value==='TCAP'){t.style.display='';i.required=!0}else{t.style.display='none';i.required=!1;i.value=''}}s&&t&&i&&(s.addEventListener('change',o),o())});"
     return render_template('main/add_coaching.html', title='Coaching hinzufügen', form=form, tcap_js=tcap_js, is_edit_mode=False, config=current_app.config)
 
-# --- NEUE WORKSHOP-ROUTEN ---
+
 @bp.route('/workshop/add', methods=['GET', 'POST'])
 @login_required
 @role_required([ROLE_TEAMLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_ADMIN])
@@ -319,7 +320,6 @@ def add_workshop():
             for member_id in form.team_member_ids.data:
                 individual_rating_key = f'individual_rating_{member_id}'
                 individual_rating = request.form.get(individual_rating_key, type=int)
-                # Validierung: 0-10
                 if individual_rating is not None and 0 <= individual_rating <= 10:
                     stmt = workshop_participants.insert().values(
                         workshop_id=workshop.id,
@@ -345,7 +345,85 @@ def add_workshop():
             field_label = getattr(form, field).label.text if hasattr(getattr(form, field), 'label') else field
             flash(f"Fehler '{field_label}': {'; '.join(errors)}", 'danger')
 
-    return render_template('main/add_workshop.html', title='Workshop hinzufügen', form=form, config=current_app.config)
+    return render_template('main/add_workshop.html', title='Workshop hinzufügen', form=form, is_edit_mode=False, config=current_app.config)
+
+
+@bp.route('/workshop/<int:workshop_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_workshop(workshop_id):
+    workshop_to_edit = Workshop.query.get_or_404(workshop_id)
+
+    # Berechtigungsprüfung: nur der Coach selbst oder Admin
+    if not (current_user.id == workshop_to_edit.coach_id or current_user.role == ROLE_ADMIN):
+        flash('Sie haben keine Berechtigung, diesen Workshop zu bearbeiten.', 'danger')
+        abort(403)
+
+    # Team-IDs für Teamleiter (falls relevant)
+    if current_user.role == ROLE_TEAMLEITER:
+        user_team_ids = [team.id for team in current_user.teams_led]
+    else:
+        user_team_ids = []  # Admin oder Coach ohne Teamleiter-Rolle sehen alle
+
+    form = WorkshopForm(
+        obj=workshop_to_edit,
+        current_user_role=current_user.role,
+        current_user_team_ids=user_team_ids
+    )
+    form.update_participant_choices()
+
+    # Bestehende Teilnehmer-IDs vorauswählen
+    existing_participant_ids = [p.id for p in workshop_to_edit.participants]
+    form.team_member_ids.data = existing_participant_ids
+
+    if form.validate_on_submit():
+        try:
+            workshop_to_edit.title = form.title.data
+            workshop_to_edit.overall_rating = form.overall_rating.data
+            workshop_to_edit.time_spent = form.time_spent.data
+            workshop_to_edit.notes = form.notes.data
+
+            # Teilnehmer aktualisieren
+            workshop_to_edit.participants = []
+            db.session.flush()
+
+            for member_id in form.team_member_ids.data:
+                individual_rating_key = f'individual_rating_{member_id}'
+                individual_rating = request.form.get(individual_rating_key, type=int)
+                if individual_rating is not None and 0 <= individual_rating <= 10:
+                    stmt = workshop_participants.insert().values(
+                        workshop_id=workshop_to_edit.id,
+                        team_member_id=member_id,
+                        individual_rating=individual_rating
+                    )
+                    db.session.execute(stmt)
+                else:
+                    flash(f'Ungültige Bewertung für Teilnehmer ID {member_id}', 'danger')
+                    db.session.rollback()
+                    return redirect(url_for('main.edit_workshop', workshop_id=workshop_id))
+
+            db.session.commit()
+            flash('Workshop erfolgreich aktualisiert!', 'success')
+            return redirect(url_for('main.workshop_dashboard'))
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Edit workshop error: {e}")
+            flash(f'Fehler: {str(e)}', 'danger')
+
+    # Bei GET: Bewertungen für bestehende Teilnehmer sammeln
+    existing_ratings = {}
+    for participant in workshop_to_edit.participants:
+        rating = db.session.query(workshop_participants.c.individual_rating).filter_by(
+            workshop_id=workshop_id, team_member_id=participant.id).scalar()
+        existing_ratings[participant.id] = rating
+
+    return render_template('main/add_workshop.html',
+                           title=f'Workshop bearbeiten',
+                           form=form,
+                           is_edit_mode=True,
+                           workshop=workshop_to_edit,
+                           existing_ratings=existing_ratings,
+                           config=current_app.config)
+
 
 @bp.route('/workshop-dashboard', methods=['GET'])
 @login_required
@@ -354,25 +432,20 @@ def workshop_dashboard():
     page = request.args.get('page', 1, type=int)
     period_arg = request.args.get('period', 'all')
 
-    # Basis-Query für Workshops
     workshops_query = Workshop.query
 
-    # Optional: Filter nach Zeitraum (gleiche Logik wie bei Coachings)
     start_date, end_date = calculate_date_range(period_arg)
     if start_date:
         workshops_query = workshops_query.filter(Workshop.workshop_date >= start_date)
     if end_date:
         workshops_query = workshops_query.filter(Workshop.workshop_date <= end_date)
 
-    # Statistiken für die Kacheln
     total_workshops = workshops_query.count()
     total_time = workshops_query.with_entities(func.sum(Workshop.time_spent)).scalar() or 0
     avg_rating = workshops_query.with_entities(func.avg(Workshop.overall_rating)).scalar() or 0
 
-    # Paginierte Liste
     workshops_paginated = workshops_query.order_by(desc(Workshop.workshop_date)).paginate(page=page, per_page=10, error_out=False)
 
-    # Monatsoptionen für Filter (wie bei Coachings)
     now = datetime.now(timezone.utc)
     cy = now.year
     py = cy - 1
@@ -391,10 +464,9 @@ def workshop_dashboard():
                            current_period_filter=period_arg,
                            month_options=month_options,
                            config=current_app.config,
-                           workshop_participants=workshop_participants,  # für Template-Zugriff
-                           db=db)  # für Abfragen im Template
+                           workshop_participants=workshop_participants,
+                           db=db)
 
-# --- WEITERE BESTEHENDE ROUTEN (unverändert) ---
 
 @bp.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -409,6 +481,7 @@ def profile():
         flash('Ihr Passwort wurde erfolgreich geändert.', 'success')
         return redirect(url_for('main.profile'))
     return render_template('main/profile.html', title='Profil', form=form, config=current_app.config)
+
 
 @bp.route('/coaching/<int:coaching_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -456,6 +529,7 @@ def edit_coaching(coaching_id):
                            coaching_id_being_edited=coaching_to_edit.id,
                            tcap_js=tcap_js,
                            config=current_app.config)
+
 
 @bp.route('/coaching_review_dashboard', methods=['GET', 'POST'])
 @login_required
@@ -555,6 +629,7 @@ def pl_qm_dashboard():
                            selected_team_object_for_cards=selected_team_object_for_cards,
                            members_data_for_cards=members_data_for_cards,
                            config=current_app.config)
+
 
 @bp.route('/api/member_coaching_trend', methods=['GET'])
 @login_required
