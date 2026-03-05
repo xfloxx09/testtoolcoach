@@ -81,7 +81,7 @@
         min-width: 60px;
     }
 
-    /* Teilnehmerauswahl als Team-gruppierte Karten */
+    /* Teilnehmerauswahl als Team-gruppierte Karten mit Bewertung */
     .team-accordion {
         margin-bottom: 15px;
         border: 1px solid #444;
@@ -139,6 +139,8 @@
         border-radius: 4px;
         background-color: #333;
         transition: background-color 0.2s;
+        flex-wrap: wrap;
+        gap: 10px;
     }
     .member-item:hover {
         background-color: #3d3d3d;
@@ -153,6 +155,29 @@
         color: #ddd;
         cursor: pointer;
         flex: 1;
+        min-width: 150px;
+    }
+    .member-rating {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .member-rating input {
+        width: 70px;
+        background-color: #444;
+        border: 1px solid #555;
+        color: #f0f0f0;
+        border-radius: 4px;
+        padding: 5px 8px;
+        text-align: center;
+    }
+    .member-rating input:focus {
+        border-color: #e20074;
+        outline: none;
+    }
+    .member-rating span {
+        color: #aaa;
+        font-size: 0.9rem;
     }
     .member-count-badge {
         background-color: #e20074;
@@ -214,10 +239,10 @@
             </div>
         </div>
 
-        <!-- Abschnitt 2: Teilnehmerauswahl mit Suchfilter und aufklappbaren Teams -->
+        <!-- Abschnitt 2: Teilnehmerauswahl mit Bewertung -->
         <div class="form-section">
-            <h4 class="section-title"><i class="fas fa-user-friends"></i> Teilnehmer</h4>
-            <p class="text-muted mb-3">Wählen Sie mindestens zwei Teilnehmer aus.</p>
+            <h4 class="section-title"><i class="fas fa-user-friends"></i> Teilnehmer & Bewertung</h4>
+            <p class="text-muted mb-3">Wählen Sie Teilnehmer aus und vergeben Sie eine individuelle Bewertung (0-10).</p>
 
             <div class="member-search position-relative">
                 <input type="text" id="member-filter" placeholder="Teilnehmer suchen...">
@@ -252,6 +277,14 @@
                                    id="member-{{ member_id }}"
                                    {% if is_edit_mode and member_id in existing_participant_ids %}checked{% endif %}>
                             <label for="member-{{ member_id }}">{{ member_name }}</label>
+                            <div class="member-rating">
+                                <input type="number" name="individual_rating_{{ member_id }}" 
+                                       min="0" max="10" step="1" 
+                                       value="{% if is_edit_mode and existing_ratings %}{{ existing_ratings.get(member_id, '') }}{% endif %}"
+                                       placeholder="0-10"
+                                       {% if is_edit_mode and member_id in existing_participant_ids %}required{% endif %}>
+                                <span>/10</span>
+                            </div>
                         </div>
                         {% endfor %}
                     </div>
@@ -266,9 +299,9 @@
             {% endif %}
         </div>
 
-        <!-- Abschnitt 3: Bewertung & Zeitaufwand (mit farbigem Slider) -->
+        <!-- Abschnitt 3: Gesamtbewertung & Zeitaufwand -->
         <div class="form-section">
-            <h4 class="section-title"><i class="fas fa-star"></i> Bewertung & Zeitaufwand</h4>
+            <h4 class="section-title"><i class="fas fa-star"></i> Gesamtbewertung & Zeitaufwand</h4>
             <div class="form-row">
                 <div class="form-group col-md-6">
                     {{ form.overall_rating.label(class="form-control-label") }}
@@ -321,7 +354,7 @@
 {{ super() }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // --- 1. Bewertungs-Slider (farbig wie bei Coaching) ---
+    // --- 1. Bewertungs-Slider ---
     const ratingSlider = document.getElementById('rating_slider');
     const ratingHidden = document.getElementById('overall_rating_hidden');
     const ratingDisplay = document.getElementById('rating_display');
@@ -352,7 +385,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // --- 3. Teilnehmer-Checkboxen verwalten ---
+    // --- 3. Teilnehmer-Checkboxen und Bewertungen verwalten ---
     const selectMultiple = document.getElementById('team_member_ids');
     const checkboxes = document.querySelectorAll('input[name="participant_checkbox"]');
     const selectAllCheckboxes = document.querySelectorAll('.select-all-checkbox');
@@ -383,28 +416,36 @@ document.addEventListener('DOMContentLoaded', function() {
             const teamCheckboxes = document.querySelectorAll(`input[name="participant_checkbox"][data-team="${team}"]`);
             teamCheckboxes.forEach(cb => {
                 cb.checked = this.checked;
+                // Bewertungsfeld required setzen (optional)
+                const memberId = cb.value;
+                const ratingInput = document.querySelector(`input[name="individual_rating_${memberId}"]`);
+                if (ratingInput) {
+                    ratingInput.required = this.checked;
+                }
             });
             updateSelectedIds();
+        });
+    });
+
+    // Bei manuellem Check/Uncheck: required-Attribut der Bewertung anpassen
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', function() {
+            const memberId = this.value;
+            const ratingInput = document.querySelector(`input[name="individual_rating_${memberId}"]`);
+            if (ratingInput) {
+                ratingInput.required = this.checked;
+                // Optional: Wenn unchecked, Wert löschen
+                if (!this.checked) {
+                    ratingInput.value = '';
+                }
+            }
         });
     });
 
     // Initial die Select-Feld-Optionen setzen (bei Bearbeitung)
     updateSelectedIds();
 
-    // Wenn alle Checkboxen eines Teams manuell an- oder abgewählt werden, soll der "Alle auswählen"-Button entsprechend gesetzt werden.
-    checkboxes.forEach(cb => {
-        cb.addEventListener('change', function() {
-            const team = this.dataset.team;
-            const teamCheckboxes = document.querySelectorAll(`input[name="participant_checkbox"][data-team="${team}"]`);
-            const teamSelectAll = document.querySelector(`.select-all-checkbox[data-team="${team}"]`);
-            if (teamSelectAll) {
-                const allChecked = Array.from(teamCheckboxes).every(cb => cb.checked);
-                teamSelectAll.checked = allChecked;
-            }
-        });
-    });
-
-    // Initial die "Alle auswählen"-Buttons setzen (bei Bearbeitung)
+    // "Alle auswählen"-Buttons initial setzen
     document.querySelectorAll('.team-accordion').forEach(accordion => {
         const team = accordion.dataset.team;
         if (team) {
