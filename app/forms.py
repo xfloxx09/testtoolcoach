@@ -139,3 +139,9 @@ class ProjectLeaderNoteForm(FlaskForm):
     notes = TextAreaField('PL/QM Notiz',
                           validators=[DataRequired("Die Notiz darf nicht leer sein."),
                                       Length(max=2000)])
+
+class PasswordChangeForm(FlaskForm):
+    old_password = PasswordField('Aktuelles Passwort', validators=[DataRequired("Bitte aktuelles Passwort eingeben.")])
+    new_password = PasswordField('Neues Passwort', validators=[DataRequired("Neues Passwort ist erforderlich."), Length(min=6)])
+    confirm_password = PasswordField('Neues Passwort wiederholen', validators=[DataRequired("Bitte wiederholen."), EqualTo('new_password', message='Passwörter müssen übereinstimmen.')])
+    submit = SubmitField('Passwort ändern')
