@@ -269,7 +269,7 @@ def team_view():
             all_teams_for_selection = teams_query.order_by(Team.name).all()
         return render_template('main/team_view.html', title="Team Auswählen", team=None, all_teams_list=all_teams_for_selection, team_members_performance=[], team_coachings=[], config=current_app.config)
 
-    # Rest (Mitglieder-Statistiken) unverändert
+    # Rest (Mitglieder-Statistiken)
     team_member_ids_in_selected_team = [member.id for member in selected_team_object.members]
     if team_member_ids_in_selected_team:
         team_coachings_list_for_display = Coaching.query.filter(Coaching.team_member_id.in_(team_member_ids_in_selected_team)).order_by(desc(Coaching.coaching_date)).limit(10).all()
@@ -312,7 +312,6 @@ def add_coaching():
 
     # Projekt-ID bestimmen
     if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
-        # Kann aus Formular kommen oder aus Session/Query
         selected_project_id = request.args.get('project', type=int) or session.get('active_project') or current_user.project_id
     else:
         selected_project_id = current_user.project_id
@@ -419,12 +418,10 @@ def add_workshop():
 def edit_workshop(workshop_id):
     workshop_to_edit = Workshop.query.get_or_404(workshop_id)
 
-    # Berechtigung: nur Coach selbst oder Admin/Betriebsleiter
     if not (current_user.id == workshop_to_edit.coach_id or current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]):
         flash('Sie haben keine Berechtigung, diesen Workshop zu bearbeiten.', 'danger')
         abort(403)
 
-    # Prüfen, ob User Zugriff auf das Projekt hat
     if current_user.role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER] and current_user.project_id != workshop_to_edit.project_id:
         abort(403)
 
@@ -446,7 +443,6 @@ def edit_workshop(workshop_id):
             workshop_to_edit.time_spent = form.time_spent.data
             workshop_to_edit.notes = form.notes.data
 
-            # Teilnehmer aktualisieren
             workshop_to_edit.participants = []
             db.session.flush()
 
@@ -630,7 +626,6 @@ def pl_qm_dashboard():
         elif form_val.validate():
             try:
                 coaching = Coaching.query.get_or_404(int(coaching_id_str))
-                # Prüfen, ob Coaching im sichtbaren Projekt liegt
                 if current_user.role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER] and coaching.project_id != project_filter:
                     abort(403)
                 coaching.project_leader_notes = form_val.notes.data
@@ -678,7 +673,6 @@ def pl_qm_dashboard():
         selected_team_id = int(selected_team_id_filter_str)
         selected_team_object_for_cards = Team.query.get(selected_team_id)
         if selected_team_object_for_cards:
-            # Prüfen, ob Team im sichtbaren Projekt
             if current_user.role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER] and selected_team_object_for_cards.project_id != project_filter:
                 abort(403)
             for member in selected_team_object_for_cards.members.all():
@@ -724,7 +718,6 @@ def get_member_coaching_trend():
         team_member_id = int(team_member_id_str)
     except ValueError:
         return jsonify({"error": "Invalid Team Member ID format"}), 400
-    # Prüfen, ob Teammitglied im sichtbaren Projekt liegt (optional)
     member = TeamMember.query.get_or_404(team_member_id)
     if current_user.role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER] and member.team.project_id != current_user.project_id:
         return jsonify({"error": "Access denied"}), 403
@@ -751,7 +744,6 @@ def get_member_coaching_trend():
         dates.append(coaching.coaching_date.strftime('%d.%m.%y'))
     return jsonify({"labels": labels, "scores": scores, "dates": dates})
 
-# Optional: Route zum Setzen des aktiven Projekts (für Admins/Betriebsleiter)
 @bp.route('/set-project/<int:project_id>')
 @login_required
 def set_project(project_id):
