@@ -232,7 +232,7 @@
             <h4 class="section-title"><i class="fas fa-tag"></i> Workshop-Thema</h4>
             <div class="form-group">
                 {{ form.title.label(class="form-control-label") }}
-                {{ form.title(class="form-control " + ("is-invalid" if form.title.errors else ""), placeholder="z.B. 'Einführung in agiles Arbeiten'") }}
+                {{ form.title(class="form-control " + ("is-invalid" if form.title.errors else ""), placeholder="z.B. 'Sales 101'") }}
                 {% if form.title.errors %}
                     <div class="invalid-feedback">{% for error in form.title.errors %}{{ error }}{% endfor %}</div>
                 {% endif %}
