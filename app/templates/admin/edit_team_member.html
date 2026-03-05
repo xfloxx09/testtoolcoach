@@ -21,11 +21,31 @@
                         {% endif %}
                     </div>
 
+                    <!-- Projektauswahl (nur zur Filterung) -->
+                    <div class="form-group">
+                        <label for="project_filter">Projekt</label>
+                        <select class="form-control" id="project_filter">
+                            <option value="">-- Projekt wählen --</option>
+                            {% for project in projects %}
+                                <option value="{{ project.id }}" {% if project.id == member.team.project_id %}selected{% endif %}>{{ project.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">Wähle ein Projekt, um die Teams zu filtern.</small>
+                    </div>
+
                     <div class="form-group">
                         {{ form.team_id.label(class="form-control-label") }}
-                        {{ form.team_id(class="form-control custom-select " + ("is-invalid" if form.team_id.errors else "")) }}
+                        <select name="team_id" id="team_id" class="form-control custom-select" required>
+                            <option value="">-- Team wählen --</option>
+                            {% for value, label in form.team_id.choices %}
+                                {% set team_id = value %}
+                                {% set team_name = label.split(' (')[0] %}
+                                {% set project_name = label.split('(')[1].rstrip(')') if '(' in label else '' %}
+                                <option value="{{ team_id }}" data-project="{{ project_name }}" {% if team_id == member.team_id %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
                         {% if form.team_id.errors %}
-                            <div class="invalid-feedback">
+                            <div class="invalid-feedback d-block">
                                 {% for error in form.team_id.errors %}<span>{{ error }}</span>{% endfor %}
                             </div>
                         {% endif %}
@@ -40,4 +60,36 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const projectFilter = document.getElementById('project_filter');
+    const teamSelect = document.getElementById('team_id');
+    const teamOptions = Array.from(teamSelect.options).slice(1); // Alle außer dem ersten Placeholder
+
+    function filterTeams() {
+        const selectedProject = projectFilter.value;
+        teamOptions.forEach(option => {
+            const projectName = option.getAttribute('data-project');
+            if (!selectedProject) {
+                option.style.display = 'block';
+            } else {
+                const selectedProjectName = projectFilter.options[projectFilter.selectedIndex].text;
+                if (projectName === selectedProjectName) {
+                    option.style.display = 'block';
+                } else {
+                    option.style.display = 'none';
+                }
+            }
+        });
+        // Falls die aktuell ausgewählte Option ausgeblendet wird, setze auf Placeholder
+        if (teamSelect.selectedOptions[0] && teamSelect.selectedOptions[0].style.display === 'none') {
+            teamSelect.selectedIndex = 0;
+        }
+    }
+
+    projectFilter.addEventListener('change', filterTeams);
+    filterTeams(); // Initial ausführen
+});
+</script>
 {% endblock %}
