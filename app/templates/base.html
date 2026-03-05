@@ -19,10 +19,24 @@
             <ul class="navbar-nav mr-auto">
                 {% if current_user.is_authenticated %}
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('main.index') }}">Dashboard</a></li>
+                    
                     {% if current_user.role in ['Teamleiter', 'Qualitätsmanager', 'SalesCoach', 'Trainer', 'Admin', 'Betriebsleiter'] %}
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('main.add_coaching') }}">Coaching hinzufügen</a></li>
-                        <li class="nav-item"><a class="nav-link" href="{{ url_for('main.add_workshop') }}">Workshop hinzufügen</a></li>
+                        <!-- Neuer kombinierter Button "Jetzt coachen" mit Dropdown -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle telekom-button" href="#" id="coachDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="background-color: #e20074; border-radius: 20px; padding: 5px 15px; margin-left: 10px; color: white;">
+                                <i class="fas fa-plus-circle"></i> Jetzt coachen
+                            </a>
+                            <div class="dropdown-menu" aria-labelledby="coachDropdown">
+                                <a class="dropdown-item" href="{{ url_for('main.add_coaching') }}">
+                                    <i class="fas fa-chalkboard-teacher"></i> Coaching (Einzel)
+                                </a>
+                                <a class="dropdown-item" href="{{ url_for('main.add_workshop') }}">
+                                    <i class="fas fa-users"></i> Workshop (Gruppe)
+                                </a>
+                            </div>
+                        </li>
                     {% endif %}
+
                     {% if current_user.role == 'Teamleiter' and current_user.teams_led.count() > 0 %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('main.team_view') }}">Mein Team</a></li>
                     {% endif %}
