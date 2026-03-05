@@ -26,11 +26,10 @@ class RegistrationForm(FlaskForm):
         ('Trainer', 'Trainer'),
         ('Projektleiter', 'AL/PL'),
         ('Admin', 'Admin'),
-        ('Betriebsleiter', 'Betriebsleiter'),  # <-- NEU
+        ('Betriebsleiter', 'Betriebsleiter'),
         ('Abteilungsleiter', 'Abteilungsleiter')
     ], validators=[DataRequired("Rolle ist erforderlich.")])
     team_ids = SelectMultipleField('Zugeordnete Teams (nur für Teamleiter)', coerce=int, choices=[])
-    # NEU: Projektauswahl (nur für Admin/Betriebsleiter sichtbar)
     project_id = SelectField('Projekt', coerce=int, choices=[])
     submit = SubmitField('Benutzer registrieren/aktualisieren')
 
@@ -39,7 +38,6 @@ class RegistrationForm(FlaskForm):
         self.original_username = original_username
         active_teams = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
         self.team_ids.choices = [(t.id, t.name) for t in active_teams]
-        # Alle Projekte für die Auswahl
         self.project_id.choices = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
 
     def validate_username(self, username_field):
@@ -53,7 +51,6 @@ class RegistrationForm(FlaskForm):
 class TeamForm(FlaskForm):
     name = StringField('Team Name', validators=[DataRequired(), Length(min=3, max=100)])
     team_leaders = SelectMultipleField('Teamleiter', coerce=int, choices=[])
-    # NEU: Projektauswahl (nur für Admin/Betriebsleiter sichtbar)
     project_id = SelectField('Projekt', coerce=int, choices=[])
     submit = SubmitField('Team erstellen/aktualisieren')
 
@@ -114,15 +111,12 @@ class CoachingForm(FlaskForm):
     performance_mark = IntegerField('Performance Note (0-10)', validators=[DataRequired("Performance Note ist erforderlich."), NumberRange(min=0, max=10)])
     time_spent = IntegerField('Zeitaufwand (Minuten)', validators=[DataRequired("Zeitaufwand ist erforderlich."), NumberRange(min=1)])
     coach_notes = TextAreaField('Notizen des Coaches', validators=[Length(max=2000)])
-    # Optional: Projektauswahl für Admins/Betriebsleiter
-    project_id = SelectField('Projekt', coerce=int, choices=[])
     submit = SubmitField('Coaching speichern')
 
     def __init__(self, current_user_role=None, current_user_team_ids=None, *args, **kwargs):
         super(CoachingForm, self).__init__(*args, **kwargs)
         self.current_user_role = current_user_role
         self.current_user_team_ids = current_user_team_ids if current_user_team_ids is not None else []
-        self.project_id.choices = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
 
     def update_team_member_choices(self, exclude_archiv=False, project_id=None):
         generated_choices = []
@@ -130,8 +124,7 @@ class CoachingForm(FlaskForm):
         if project_id:
             query = query.filter(Team.project_id == project_id)
         elif self.current_user_role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
-            # Normale User: auf eigenes Projekt beschränken
-            # In der Route wird project_id übergeben, daher ist dieser Fall eigentlich nicht nötig
+            # Normale User: auf eigenes Projekt beschränken (wird durch project_id in der Route gesteuert)
             pass
         if exclude_archiv:
             query = query.filter(Team.name != ARCHIV_TEAM_NAME)
