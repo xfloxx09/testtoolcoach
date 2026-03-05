@@ -42,7 +42,7 @@ def calculate_date_range(period_filter_str=None):
 def get_filtered_coachings_subquery(period_filter_str=None, project_id=None):
     q = db.session.query(
         Coaching.id.label("coaching_id_sq"),
-        Coaching.team_id.label("team_id_sq"),  # NEU: Verwende team_id statt über Member
+        Coaching.team_id.label("team_id_sq"),
         Coaching.performance_mark.label("performance_mark_sq"),
         Coaching.time_spent.label("time_spent_sq"),
         Coaching.coaching_subject.label("coaching_subject_sq")
@@ -56,7 +56,6 @@ def get_filtered_coachings_subquery(period_filter_str=None, project_id=None):
 
 def get_performance_data_for_charts(period_filter_str=None, selected_team_id_str=None, project_id=None):
     sq = get_filtered_coachings_subquery(period_filter_str, project_id)
-    # Jetzt direkt über Team und die gespeicherte team_id in der Subquery
     q = db.session.query(
         Team.id.label('team_id'),
         Team.name.label('team_name'),
@@ -127,20 +126,35 @@ def coaching_dashboard():
     search_arg = request.args.get('search', default="", type=str).strip()
     project_filter = get_visible_project_id()
 
-    # Globale Statistiken: Verwende Coaching.team_id statt Umweg über Member
-    global_q = Coaching.query.join(Team, Coaching.team_id == Team.id).filter(Team.name != ARCHIV_TEAM_NAME)
+    # --- Globale Statistiken (mit allen Filtern) ---
+    global_base = Coaching.query.join(Team, Coaching.team_id == Team.id).filter(Team.name != ARCHIV_TEAM_NAME)
+
     if project_filter:
-        global_q = global_q.filter(Coaching.project_id == project_filter)
+        global_base = global_base.filter(Coaching.project_id == project_filter)
+
+    if team_arg and team_arg.isdigit():
+        global_base = global_base.filter(Coaching.team_id == int(team_arg))
 
     gs_d, ge_d = calculate_date_range(period_arg)
-    if gs_d: global_q = global_q.filter(Coaching.coaching_date >= gs_d)
-    if ge_d: global_q = global_q.filter(Coaching.coaching_date <= ge_d)
-    global_total_coachings = global_q.count()
-    global_time_obj = global_q.with_entities(func.sum(Coaching.time_spent)).scalar()
-    global_time = global_time_obj if global_time_obj else 0
-    global_time_display = f"{global_time//60} Std. {global_time%60} Min. ({global_time} Min.)"
+    if gs_d: global_base = global_base.filter(Coaching.coaching_date >= gs_d)
+    if ge_d: global_base = global_base.filter(Coaching.coaching_date <= ge_d)
 
-    # Liste für Tabelle: Benötigt Member- und Coach-Informationen, daher weiterhin über Member
+    if search_arg:
+        global_base = global_base.join(TeamMember, Coaching.team_member_id == TeamMember.id)\
+                                   .join(User, Coaching.coach_id == User.id, isouter=True)\
+                                   .filter(or_(
+                                       TeamMember.name.ilike(f"%{search_arg}%"),
+                                       User.username.ilike(f"%{search_arg}%"),
+                                       Coaching.coaching_subject.ilike(f"%{search_arg}%")
+                                   ))
+
+    # IDs der gefilterten Coachings für saubere Summenberechnung
+    filtered_ids_subquery = global_base.with_entities(Coaching.id).distinct().subquery()
+    global_total_coachings = global_base.distinct().count()
+    total_time = db.session.query(func.sum(Coaching.time_spent)).filter(Coaching.id.in_(filtered_ids_subquery)).scalar() or 0
+    global_time_display = f"{total_time//60} Std. {total_time%60} Min. ({total_time} Min.)"
+
+    # --- Liste für Tabelle (wie bisher) ---
     list_q = Coaching.query.join(TeamMember, Coaching.team_member_id == TeamMember.id)\
                            .join(Team, TeamMember.team_id == Team.id)\
                            .join(User, Coaching.coach_id == User.id, isouter=True)\
@@ -153,7 +167,6 @@ def coaching_dashboard():
     if ls_d: list_q = list_q.filter(Coaching.coaching_date >= ls_d)
     if le_d: list_q = list_q.filter(Coaching.coaching_date <= le_d)
 
-    # Teamleiter-Filter (bleibt gleich, da es um die aktuellen Teams geht)
     if current_user.role == ROLE_TEAMLEITER:
         led_team_ids = [team.id for team in current_user.teams_led]
         if not led_team_ids:
@@ -179,17 +192,17 @@ def coaching_dashboard():
     total_filtered_list = list_q.count()
     coachings_page = list_q.order_by(desc(Coaching.coaching_date)).paginate(page=page, per_page=10, error_out=False)
 
-    # Chart-Daten mit Projektfilter (verwenden jetzt die neue Methode mit team_id)
+    # --- Chart-Daten ---
     chart_perf = get_performance_data_for_charts(period_arg, team_arg, project_filter)
     chart_subj = get_coaching_subject_distribution(period_arg, team_arg, project_filter)
 
-    # Alle Teams für Filter (nur aktive Teams, da Filter sich auf aktuelle Teams bezieht)
+    # --- Alle Teams für Filter ---
     all_teams_query = Team.query.filter(Team.name != ARCHIV_TEAM_NAME)
     if project_filter:
         all_teams_query = all_teams_query.filter(Team.project_id == project_filter)
     all_teams_dd = all_teams_query.order_by(Team.name).all()
 
-    # Monatsoptionen
+    # --- Monatsoptionen ---
     now = datetime.now(timezone.utc)
     cy = now.year
     py = cy - 1
@@ -271,7 +284,6 @@ def team_view():
             all_teams_for_selection = teams_query.order_by(Team.name).all()
         return render_template('main/team_view.html', title="Team Auswählen", team=None, all_teams_list=all_teams_for_selection, team_members_performance=[], team_coachings=[], config=current_app.config)
 
-    # Mitglieder-Statistiken (verwendet weiterhin aktuelle Teams für die Anzeige der Mitglieder)
     team_member_ids_in_selected_team = [member.id for member in selected_team_object.members]
     if team_member_ids_in_selected_team:
         team_coachings_list_for_display = Coaching.query.filter(Coaching.team_member_id.in_(team_member_ids_in_selected_team)).order_by(desc(Coaching.coaching_date)).limit(10).all()
@@ -320,7 +332,6 @@ def add_coaching():
 
     if form.validate_on_submit():
         try:
-            # Team-ID des ausgewählten Mitglieds ermitteln
             member = TeamMember.query.get(form.team_member_id.data)
             team_id = member.team_id if member else None
 
@@ -341,7 +352,7 @@ def add_coaching():
                 performance_mark=form.performance_mark.data,
                 time_spent=form.time_spent.data,
                 project_id=selected_project_id,
-                team_id=team_id  # NEU: Speichere die Team-ID
+                team_id=team_id
             )
             db.session.add(coaching)
             db.session.commit()
@@ -392,7 +403,6 @@ def add_workshop():
             for member_id in form.team_member_ids.data:
                 individual_rating_key = f'individual_rating_{member_id}'
                 individual_rating = request.form.get(individual_rating_key, type=int)
-                # Team-ID des Mitglieds zum Zeitpunkt der Aufnahme
                 member = TeamMember.query.get(member_id)
                 original_team_id = member.team_id if member else None
 
@@ -401,7 +411,7 @@ def add_workshop():
                         workshop_id=workshop.id,
                         team_member_id=member_id,
                         individual_rating=individual_rating,
-                        original_team_id=original_team_id  # NEU: speichere ursprüngliches Team
+                        original_team_id=original_team_id
                     )
                     db.session.execute(stmt)
                 else:
@@ -587,7 +597,6 @@ def edit_coaching(coaching_id):
             form.populate_obj(coaching_to_edit)
             if coaching_to_edit.coaching_style != 'TCAP':
                 coaching_to_edit.tcap_id = None
-            # Bei Bearbeitung könnte sich das Team geändert haben? Normalerweise nicht, wir lassen team_id unverändert.
             db.session.commit()
             flash('Coaching erfolgreich aktualisiert!', 'success')
             return redirect(request.args.get('next') or url_for('main.index'))
@@ -660,7 +669,7 @@ def pl_qm_dashboard():
                                 page=request.args.get('page', 1, type=int),
                                 team_id_filter=selected_team_id_filter_str))
 
-    # Team-Statistiken – Hier verwenden wir die aktuelle Team-Zugehörigkeit der Mitglieder (wie gewohnt)
+    # Team-Statistiken
     all_teams_data = []
     teams_query = Team.query.filter(Team.name != ARCHIV_TEAM_NAME)
     if project_filter:
