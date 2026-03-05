@@ -41,7 +41,6 @@
             <input type="hidden" name="page_archiv" value="1">
         </form>
 
-        {% set user_filter_active = filter_params.user_project or filter_params.user_role or filter_params.user_search %}
         {% if user_filter_active or users_paginated.items %}
             <table class="table table-sm">
                 <thead><tr><th>ID</th><th>Benutzername</th><th>Email</th><th>Rolle</th><th>Teams (als TL)</th><th>Aktionen</th></tr></thead>
@@ -122,7 +121,6 @@
             <input type="hidden" name="page_teams" value="1">
         </form>
 
-        {% set team_filter_active = filter_params.team_project or filter_params.team_search %}
         {% if team_filter_active or teams_paginated.items %}
             <table class="table table-sm">
                 <thead><tr><th>ID</th><th>Name</th><th>Projekt</th><th>Teamleiter</th><th>Mitglieder</th><th>Aktionen</th></tr></thead>
@@ -209,7 +207,6 @@
             <input type="hidden" name="page_members" value="1">
         </form>
 
-        {% set member_filter_active = filter_params.member_project or filter_params.member_team or filter_params.member_search %}
         {% if member_filter_active or members_paginated.items %}
             <table class="table table-sm">
                 <thead><tr><th>ID</th><th>Name</th><th>Team</th><th>Projekt</th><th>Aktionen</th></tr></thead>
@@ -279,7 +276,6 @@
                 <input type="hidden" name="page_archiv" value="1">
             </form>
 
-            {% set archiv_filter_active = filter_params.archiv_search %}
             {% if archiv_filter_active or archiv_paginated.items %}
                 <table class="table table-sm table-bordered">
                     <thead class="thead-light">
