@@ -218,6 +218,15 @@
                                     (T-CAP ID: {{ coaching.tcap_id }})
                                 {% endif %}<br>
                                 <strong>Betreff:</strong> {{ coaching.coaching_subject if coaching.coaching_subject else '-' }}<br>
+                                <strong>Performance Note (0-10):</strong> {{ coaching.performance_mark }}<br>
+                                <strong>Zeitaufwand:</strong> {{ coaching.time_spent }} Min.<br>
+                                <hr>
+                                <strong>Leitfaden-Checkmarks:</strong><br>
+                                <ul class="list-unstyled ml-3">
+                                {% for name, value in coaching.leitfaden_fields_list %}
+                                    <li>{{ name }}: <strong>{{ value }}</strong></li>
+                                {% endfor %}
+                                </ul>
                                 <strong>Leitfaden Erfüllung:</strong> {{ coaching.leitfaden_erfuellung_display }}
                                 
                                 {% if coaching.coach_notes %}
