@@ -3,7 +3,8 @@ from flask_login import login_user, logout_user, current_user, login_required
 from app import db
 from app.models import User
 from app.forms import LoginForm
-from urllib.parse import urlparse # <--- GEÄNDERT: Importiere urlparse von hier
+from urllib.parse import urlparse
+from sqlalchemy import func  # <-- NEU: für case-insensitive Abfrage
 
 bp = Blueprint('auth', __name__)
 
@@ -13,7 +14,8 @@ def login():
         return redirect(url_for('main.index'))
     form = LoginForm()
     if form.validate_on_submit():
-        user = User.query.filter_by(username=form.username.data).first()
+        # Case-insensitive Suche nach Benutzername
+        user = User.query.filter(func.lower(User.username) == func.lower(form.username.data)).first()
         if user is None or not user.check_password(form.password.data):
             flash('Ungültiger Benutzername oder Passwort.', 'danger')
             return redirect(url_for('auth.login'))
@@ -21,8 +23,7 @@ def login():
         flash(f'Willkommen zurück, {user.username}!', 'success')
         
         next_page = request.args.get('next')
-        # Die Verwendung von urlparse bleibt gleich, nur der Import hat sich geändert
-        if not next_page or urlparse(next_page).netloc != '': # Sicherheitscheck
+        if not next_page or urlparse(next_page).netloc != '':
             next_page = url_for('main.index')
         return redirect(next_page)
     return render_template('auth/login.html', title='Anmelden', form=form)
