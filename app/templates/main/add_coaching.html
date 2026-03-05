@@ -71,24 +71,30 @@
         color: white;
     }
     .leitfaden-btn.ja.active {
-        background-color: #218838;
-        box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.5);
+        background-color: #1e7e34;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7), 0 0 15px #28a745;
+        transform: scale(1.15);
+        border: 2px solid white;
     }
     .leitfaden-btn.nein {
         background-color: #dc3545;
         color: white;
     }
     .leitfaden-btn.nein.active {
-        background-color: #c82333;
-        box-shadow: 0 0 0 3px rgba(220, 53, 69, 0.5);
+        background-color: #bd2130;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7), 0 0 15px #dc3545;
+        transform: scale(1.15);
+        border: 2px solid white;
     }
     .leitfaden-btn.ka {
         background-color: #6c757d;
         color: white;
     }
     .leitfaden-btn.ka.active {
-        background-color: #5a6268;
-        box-shadow: 0 0 0 3px rgba(108, 117, 125, 0.5);
+        background-color: #545b62;
+        box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.7), 0 0 15px #6c757d;
+        transform: scale(1.15);
+        border: 2px solid white;
     }
     .leitfaden-btn:hover {
         transform: scale(1.1);
@@ -289,6 +295,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 parentDiv.querySelectorAll('.leitfaden-btn').forEach(b => b.classList.remove('active'));
                 // Aktiven Button markieren
                 this.classList.add('active');
+                
+                // Kurzer visueller Feedback-Effekt (optional)
+                this.style.transform = 'scale(1.2)';
+                setTimeout(() => {
+                    this.style.transform = '';
+                }, 150);
             }
         });
     });
