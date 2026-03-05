@@ -121,13 +121,23 @@ class CoachingForm(FlaskForm):
     def update_team_member_choices(self, exclude_archiv=False, project_id=None):
         generated_choices = []
         query = TeamMember.query.join(Team)
+
+        # 1. Filter nach Projekt (falls vorhanden)
         if project_id:
             query = query.filter(Team.project_id == project_id)
+
+        # 2. Für Teamleiter: zusätzlich auf ihre eigenen Teams einschränken
+        if self.current_user_role == ROLE_TEAMLEITER and self.current_user_team_ids:
+            query = query.filter(TeamMember.team_id.in_(self.current_user_team_ids))
         elif self.current_user_role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
-            # Normale User: auf eigenes Projekt beschränken (wird durch project_id in der Route gesteuert)
+            # Normale User (keine Teamleiter) – sollte nicht vorkommen, aber sicherheitshalber
+            # könnte man hier eine leere Liste setzen oder nichts tun.
             pass
+
+        # 3. Archiv ausschließen
         if exclude_archiv:
             query = query.filter(Team.name != ARCHIV_TEAM_NAME)
+
         members = query.order_by(TeamMember.name).all()
         for m in members:
             generated_choices.append((m.id, f"{m.name} ({m.team.name})"))
