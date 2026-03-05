@@ -88,6 +88,7 @@
                         <th>Bewertung</th>
                         <th>Minuten</th>
                         <th>Details</th>
+                        <th>Aktionen</th>  <!-- NEUE SPALTE -->
                     </tr>
                 </thead>
                 <tbody>
@@ -104,9 +105,16 @@
                                 Details
                             </button>
                         </td>
+                        <td>
+                            {% if current_user.id == workshop.coach_id or current_user.role == config.ROLE_ADMIN %}
+                                <a href="{{ url_for('main.edit_workshop', workshop_id=workshop.id) }}" class="btn btn-sm btn-outline-secondary" title="Bearbeiten">
+                                    <i class="fas fa-edit"></i>
+                                </a>
+                            {% endif %}
+                        </td>
                     </tr>
                     <tr class="collapse" id="workshopDetails{{ workshop.id }}">
-                        <td colspan="7">
+                        <td colspan="8">  <!-- colspan auf 8 erhöht wegen neuer Spalte -->
                             <div class="card card-body">
                                 <strong>Teilnehmer mit Einzelbewertungen:</strong>
                                 <ul>
