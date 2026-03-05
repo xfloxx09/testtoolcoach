@@ -73,7 +73,8 @@ class Team(db.Model):
     )
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
 
-    members = db.relationship('TeamMember', backref='team', lazy='dynamic')
+    # Wichtig: foreign_keys muss angegeben werden, da TeamMember jetzt zwei Fremdschlüssel auf teams hat
+    members = db.relationship('TeamMember', backref='team', lazy='dynamic', foreign_keys='TeamMember.team_id')
     leaders = db.relationship('User', secondary=team_leaders, back_populates='teams_led', lazy='dynamic')
 
     def __repr__(self):
@@ -92,6 +93,10 @@ class TeamMember(db.Model):
     # NEU: Felder für die ursprüngliche Zugehörigkeit (wenn im Archiv)
     original_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
     original_project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True)
+
+    # Beziehungen für die ursprünglichen Daten
+    original_team = db.relationship('Team', foreign_keys=[original_team_id])
+    original_project = db.relationship('Project', foreign_keys=[original_project_id])
 
     def __repr__(self):
         return f'<TeamMember {self.name} (Team ID: {self.team_id})>'
