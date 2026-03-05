@@ -40,16 +40,23 @@ def calculate_date_range(period_filter_str=None):
     return start_date,end_date
 
 def get_filtered_coachings_subquery(period_filter_str=None, project_id=None):
-    q = db.session.query(Coaching.id.label("coaching_id_sq"),Coaching.team_member_id.label("team_member_id_sq"),Coaching.performance_mark.label("performance_mark_sq"),Coaching.time_spent.label("time_spent_sq"),Coaching.coaching_subject.label("coaching_subject_sq"))
+    q = db.session.query(
+        Coaching.id.label("coaching_id_sq"),
+        Coaching.team_id.label("team_id_sq"),  # NEU: Verwende team_id statt über Member
+        Coaching.performance_mark.label("performance_mark_sq"),
+        Coaching.time_spent.label("time_spent_sq"),
+        Coaching.coaching_subject.label("coaching_subject_sq")
+    )
     s_d,e_d = calculate_date_range(period_filter_str)
-    if s_d: q=q.filter(Coaching.coaching_date>=s_d)
-    if e_d: q=q.filter(Coaching.coaching_date<=e_d)
+    if s_d: q = q.filter(Coaching.coaching_date >= s_d)
+    if e_d: q = q.filter(Coaching.coaching_date <= e_d)
     if project_id:
         q = q.filter(Coaching.project_id == project_id)
     return q.subquery('filtered_coachings_sq')
 
 def get_performance_data_for_charts(period_filter_str=None, selected_team_id_str=None, project_id=None):
     sq = get_filtered_coachings_subquery(period_filter_str, project_id)
+    # Jetzt direkt über Team und die gespeicherte team_id in der Subquery
     q = db.session.query(
         Team.id.label('team_id'),
         Team.name.label('team_name'),
@@ -57,8 +64,7 @@ def get_performance_data_for_charts(period_filter_str=None, selected_team_id_str
         func.coalesce(func.sum(sq.c.time_spent_sq), 0).label('total_time'),
         func.coalesce(func.count(sq.c.coaching_id_sq), 0).label('num_coachings')
     ).select_from(Team)\
-     .outerjoin(TeamMember, Team.id == TeamMember.team_id)\
-     .outerjoin(sq, TeamMember.id == sq.c.team_member_id_sq)
+     .outerjoin(sq, Team.id == sq.c.team_id_sq)
 
     q = q.filter(Team.name != ARCHIV_TEAM_NAME)
 
@@ -80,20 +86,22 @@ def get_performance_data_for_charts(period_filter_str=None, selected_team_id_str
     }
 
 def get_coaching_subject_distribution(period_filter_str=None, selected_team_id_str=None, project_id=None):
-    sq=get_filtered_coachings_subquery(period_filter_str, project_id)
-    q=db.session.query(sq.c.coaching_subject_sq.label('subject'),func.count(sq.c.coaching_id_sq).label('count')).select_from(sq).filter(sq.c.coaching_subject_sq.isnot(None)).filter(sq.c.coaching_subject_sq != '')
+    sq = get_filtered_coachings_subquery(period_filter_str, project_id)
+    q = db.session.query(
+        sq.c.coaching_subject_sq.label('subject'),
+        func.count(sq.c.coaching_id_sq).label('count')
+    ).select_from(sq).filter(sq.c.coaching_subject_sq.isnot(None)).filter(sq.c.coaching_subject_sq != '')
 
-    q = q.join(TeamMember, sq.c.team_member_id_sq == TeamMember.id)\
-         .join(Team, TeamMember.team_id == Team.id)\
+    q = q.join(Team, sq.c.team_id_sq == Team.id)\
          .filter(Team.name != ARCHIV_TEAM_NAME)
 
     if project_id:
         q = q.filter(Team.project_id == project_id)
 
     if selected_team_id_str and selected_team_id_str.isdigit():
-        q = q.filter(TeamMember.team_id==int(selected_team_id_str))
+        q = q.filter(Team.id == int(selected_team_id_str))
 
-    res=q.group_by(sq.c.coaching_subject_sq).order_by(desc('count')).all()
+    res = q.group_by(sq.c.coaching_subject_sq).order_by(desc('count')).all()
     return {'labels':[r.subject for r in res if r.subject],'values':[r.count for r in res if r.subject]}
 
 def get_visible_project_id():
@@ -119,11 +127,8 @@ def coaching_dashboard():
     search_arg = request.args.get('search', default="", type=str).strip()
     project_filter = get_visible_project_id()
 
-    # Globale Statistiken
-    global_q = Coaching.query.join(TeamMember, Coaching.team_member_id == TeamMember.id)\
-                              .join(Team, TeamMember.team_id == Team.id)\
-                              .filter(Team.name != ARCHIV_TEAM_NAME)
-
+    # Globale Statistiken: Verwende Coaching.team_id statt Umweg über Member
+    global_q = Coaching.query.join(Team, Coaching.team_id == Team.id).filter(Team.name != ARCHIV_TEAM_NAME)
     if project_filter:
         global_q = global_q.filter(Coaching.project_id == project_filter)
 
@@ -135,7 +140,7 @@ def coaching_dashboard():
     global_time = global_time_obj if global_time_obj else 0
     global_time_display = f"{global_time//60} Std. {global_time%60} Min. ({global_time} Min.)"
 
-    # Liste für Tabelle
+    # Liste für Tabelle: Benötigt Member- und Coach-Informationen, daher weiterhin über Member
     list_q = Coaching.query.join(TeamMember, Coaching.team_member_id == TeamMember.id)\
                            .join(Team, TeamMember.team_id == Team.id)\
                            .join(User, Coaching.coach_id == User.id, isouter=True)\
@@ -148,7 +153,7 @@ def coaching_dashboard():
     if ls_d: list_q = list_q.filter(Coaching.coaching_date >= ls_d)
     if le_d: list_q = list_q.filter(Coaching.coaching_date <= le_d)
 
-    # Teamleiter-Filter
+    # Teamleiter-Filter (bleibt gleich, da es um die aktuellen Teams geht)
     if current_user.role == ROLE_TEAMLEITER:
         led_team_ids = [team.id for team in current_user.teams_led]
         if not led_team_ids:
@@ -174,11 +179,11 @@ def coaching_dashboard():
     total_filtered_list = list_q.count()
     coachings_page = list_q.order_by(desc(Coaching.coaching_date)).paginate(page=page, per_page=10, error_out=False)
 
-    # Chart-Daten mit Projektfilter
+    # Chart-Daten mit Projektfilter (verwenden jetzt die neue Methode mit team_id)
     chart_perf = get_performance_data_for_charts(period_arg, team_arg, project_filter)
     chart_subj = get_coaching_subject_distribution(period_arg, team_arg, project_filter)
 
-    # Alle Teams für Filter
+    # Alle Teams für Filter (nur aktive Teams, da Filter sich auf aktuelle Teams bezieht)
     all_teams_query = Team.query.filter(Team.name != ARCHIV_TEAM_NAME)
     if project_filter:
         all_teams_query = all_teams_query.filter(Team.project_id == project_filter)
@@ -194,7 +199,6 @@ def coaching_dashboard():
     for m in range(now.month, 0, -1):
         m_opts.append({'value': f"{cy}-{m:02d}", 'text': f"{get_month_name_german(m)} {cy}"})
 
-    # Projektliste für Admins
     all_projects = None
     if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
         all_projects = Project.query.order_by(Project.name).all()
@@ -267,7 +271,7 @@ def team_view():
             all_teams_for_selection = teams_query.order_by(Team.name).all()
         return render_template('main/team_view.html', title="Team Auswählen", team=None, all_teams_list=all_teams_for_selection, team_members_performance=[], team_coachings=[], config=current_app.config)
 
-    # Mitglieder-Statistiken
+    # Mitglieder-Statistiken (verwendet weiterhin aktuelle Teams für die Anzeige der Mitglieder)
     team_member_ids_in_selected_team = [member.id for member in selected_team_object.members]
     if team_member_ids_in_selected_team:
         team_coachings_list_for_display = Coaching.query.filter(Coaching.team_member_id.in_(team_member_ids_in_selected_team)).order_by(desc(Coaching.coaching_date)).limit(10).all()
@@ -312,11 +316,14 @@ def add_coaching():
     else:
         selected_project_id = current_user.project_id
 
-    # update_team_member_choices verwendet jetzt expliziten Join (siehe forms.py)
     form.update_team_member_choices(exclude_archiv=True, project_id=selected_project_id)
 
     if form.validate_on_submit():
         try:
+            # Team-ID des ausgewählten Mitglieds ermitteln
+            member = TeamMember.query.get(form.team_member_id.data)
+            team_id = member.team_id if member else None
+
             coaching = Coaching(
                 team_member_id=form.team_member_id.data,
                 coach_id=current_user.id,
@@ -333,7 +340,8 @@ def add_coaching():
                 leitfaden_kzb=form.leitfaden_kzb.data,
                 performance_mark=form.performance_mark.data,
                 time_spent=form.time_spent.data,
-                project_id=selected_project_id
+                project_id=selected_project_id,
+                team_id=team_id  # NEU: Speichere die Team-ID
             )
             db.session.add(coaching)
             db.session.commit()
@@ -366,7 +374,6 @@ def add_workshop():
     else:
         selected_project_id = current_user.project_id
 
-    # update_participant_choices verwendet jetzt expliziten Join
     form.update_participant_choices(project_id=selected_project_id)
 
     if form.validate_on_submit():
@@ -385,11 +392,16 @@ def add_workshop():
             for member_id in form.team_member_ids.data:
                 individual_rating_key = f'individual_rating_{member_id}'
                 individual_rating = request.form.get(individual_rating_key, type=int)
+                # Team-ID des Mitglieds zum Zeitpunkt der Aufnahme
+                member = TeamMember.query.get(member_id)
+                original_team_id = member.team_id if member else None
+
                 if individual_rating is not None and 0 <= individual_rating <= 10:
                     stmt = workshop_participants.insert().values(
                         workshop_id=workshop.id,
                         team_member_id=member_id,
-                        individual_rating=individual_rating
+                        individual_rating=individual_rating,
+                        original_team_id=original_team_id  # NEU: speichere ursprüngliches Team
                     )
                     db.session.execute(stmt)
                 else:
@@ -447,11 +459,15 @@ def edit_workshop(workshop_id):
             for member_id in form.team_member_ids.data:
                 individual_rating_key = f'individual_rating_{member_id}'
                 individual_rating = request.form.get(individual_rating_key, type=int)
+                member = TeamMember.query.get(member_id)
+                original_team_id = member.team_id if member else None
+
                 if individual_rating is not None and 0 <= individual_rating <= 10:
                     stmt = workshop_participants.insert().values(
                         workshop_id=workshop_to_edit.id,
                         team_member_id=member_id,
-                        individual_rating=individual_rating
+                        individual_rating=individual_rating,
+                        original_team_id=original_team_id
                     )
                     db.session.execute(stmt)
                 else:
@@ -571,6 +587,7 @@ def edit_coaching(coaching_id):
             form.populate_obj(coaching_to_edit)
             if coaching_to_edit.coaching_style != 'TCAP':
                 coaching_to_edit.tcap_id = None
+            # Bei Bearbeitung könnte sich das Team geändert haben? Normalerweise nicht, wir lassen team_id unverändert.
             db.session.commit()
             flash('Coaching erfolgreich aktualisiert!', 'success')
             return redirect(request.args.get('next') or url_for('main.index'))
@@ -600,7 +617,6 @@ def pl_qm_dashboard():
     selected_team_id_filter_str = request.args.get('team_id_filter', None)
     project_filter = get_visible_project_id()
 
-    # EXPLIZITE JOINS für Coaching -> TeamMember -> Team
     coachings_query = Coaching.query.join(TeamMember, Coaching.team_member_id == TeamMember.id)\
                                      .join(Team, TeamMember.team_id == Team.id)\
                                      .filter(Team.name != ARCHIV_TEAM_NAME)
@@ -644,7 +660,7 @@ def pl_qm_dashboard():
                                 page=request.args.get('page', 1, type=int),
                                 team_id_filter=selected_team_id_filter_str))
 
-    # Team-Statistiken
+    # Team-Statistiken – Hier verwenden wir die aktuelle Team-Zugehörigkeit der Mitglieder (wie gewohnt)
     all_teams_data = []
     teams_query = Team.query.filter(Team.name != ARCHIV_TEAM_NAME)
     if project_filter:
