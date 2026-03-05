@@ -29,7 +29,6 @@
                     {% if current_user.role in ['Projektleiter', 'Qualitätsmanager', 'Abteilungsleiter'] %} 
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('main.pl_qm_dashboard') }}">Teams</a></li> 
                     {% endif %}
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('main.workshop_dashboard') }}">Workshops</a></li>
                     {% if current_user.role == 'Admin' %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
