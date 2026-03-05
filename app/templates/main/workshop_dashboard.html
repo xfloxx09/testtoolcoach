@@ -8,6 +8,13 @@
 <div class="container-fluid">
     <h2>{{ title }}</h2>
 
+    {% set can_add_workshop_roles = ['Teamleiter', 'Qualitätsmanager', 'SalesCoach', 'Trainer', 'Admin'] %}
+    {% if current_user.role in can_add_workshop_roles %}
+        <div class="mb-3">
+            <a href="{{ url_for('main.add_workshop') }}" class="btn telekom-button">Neuen Workshop hinzufügen</a>
+        </div>
+    {% endif %}
+
     <form method="GET" action="{{ url_for('main.workshop_dashboard') }}" class="mb-4">
         <div class="form-row align-items-end">
             <div class="col-md-3">
@@ -150,6 +157,6 @@
         <p class="text-center">Keine Workshops gefunden.</p>
     {% endif %}
 
-    <a href="{{ url_for('main.add_workshop') }}" class="btn telekom-button mt-3">Neuen Workshop hinzufügen</a>
+    {# Der Button wurde nach oben verschoben – hier nicht mehr nötig #}
 </div>
 {% endblock %}
