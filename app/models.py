@@ -1,5 +1,5 @@
 # app/models.py
-print("<<<< START models.py (MULTIPLE TEAMLEADER) GELADEN >>>>")
+print("<<<< START models.py (MULTIPLE TEAMLEADER + WORKSHOPS) GELADEN >>>>")
 
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -10,6 +10,13 @@ from datetime import datetime, timezone
 team_leaders = db.Table('team_leaders',
     db.Column('team_id', db.Integer, db.ForeignKey('teams.id', ondelete='CASCADE'), primary_key=True),
     db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
+)
+
+# Assoziationstabelle für Workshop-Teilnehmer mit individueller Bewertung
+workshop_participants = db.Table('workshop_participants',
+    db.Column('workshop_id', db.Integer, db.ForeignKey('workshops.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('team_member_id', db.Integer, db.ForeignKey('team_members.id', ondelete='CASCADE'), primary_key=True),
+    db.Column('individual_rating', db.Integer, nullable=True)  # 0-10 pro Teilnehmer
 )
 
 class User(UserMixin, db.Model):
@@ -25,6 +32,8 @@ class User(UserMixin, db.Model):
     coachings_done = db.relationship('Coaching', foreign_keys='Coaching.coach_id', backref='coach', lazy='dynamic')
     # NEU: Beziehung zu den Teams, die dieser User leitet
     teams_led = db.relationship('Team', secondary=team_leaders, back_populates='leaders', lazy='dynamic')
+    # NEU: Workshops, die dieser User gegeben hat
+    workshops_given = db.relationship('Workshop', backref='coach', lazy='dynamic')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -64,6 +73,11 @@ class TeamMember(db.Model):
     name = db.Column(db.String(100), nullable=False)
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id', name='fk_teammember_team_id'), nullable=False)
     coachings_received = db.relationship('Coaching', backref='team_member_coached', lazy='dynamic')
+    # NEU: Workshops, an denen dieses Mitglied teilgenommen hat (mit Bewertungen)
+    workshops_attended = db.relationship('Workshop', secondary=workshop_participants,
+                                         backref=db.backref('participants', lazy='dynamic'),
+                                         lazy='dynamic')
+
     def __repr__(self):
         return f'<TeamMember {self.name} (Team ID: {self.team_id})>'
 
@@ -147,4 +161,20 @@ class Coaching(db.Model):
     def __repr__(self):
         return f'<Coaching {self.id} for TeamMember {self.team_member_id} on {self.coaching_date}>'
 
-print("<<<< ENDE models.py (MULTIPLE TEAMLEADER) GELADEN >>>>")
+class Workshop(db.Model):
+    __tablename__ = 'workshops'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    coach_id = db.Column(db.Integer, db.ForeignKey('users.id', name='fk_workshop_coach_id'), nullable=False)
+    workshop_date = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
+    overall_rating = db.Column(db.Integer, nullable=True)
+    time_spent = db.Column(db.Integer, nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
+    # Beziehungen (coach ist bereits durch backref definiert)
+    # participants wird über die secondary-Tabelle verwaltet
+
+    def __repr__(self):
+        return f'<Workshop {self.id}: {self.title}>'
+
+print("<<<< ENDE models.py (MULTIPLE TEAMLEADER + WORKSHOPS) GELADEN >>>>")
