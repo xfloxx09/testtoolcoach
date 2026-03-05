@@ -15,7 +15,7 @@
 <div class="container">
     <h2>{{ title }}</h2>
 
-    <form method="POST" action="{{ url_for('main.add_workshop') }}" novalidate>
+    <form method="POST" action="{% if is_edit_mode %}{{ url_for('admin.edit_workshop_entry', workshop_id=workshop.id) }}{% else %}{{ url_for('main.add_workshop') }}{% endif %}" novalidate>
         {{ form.hidden_tag() }}
 
         <div class="form-group">
@@ -75,8 +75,10 @@
         </div>
 
         <div class="form-group">
-            <button type="submit" class="btn telekom-button">Workshop speichern</button>
-            <a href="{{ url_for('main.workshop_dashboard') }}" class="btn btn-secondary ml-2">Abbrechen</a>
+            <button type="submit" class="btn telekom-button">
+                {% if is_edit_mode %}Workshop aktualisieren{% else %}Workshop speichern{% endif %}
+            </button>
+            <a href="{% if is_edit_mode %}{{ url_for('admin.manage_workshops') }}{% else %}{{ url_for('main.workshop_dashboard') }}{% endif %}" class="btn btn-secondary ml-2">Abbrechen</a>
         </div>
     </form>
 </div>
@@ -88,6 +90,13 @@
 document.addEventListener('DOMContentLoaded', function() {
     const select = document.getElementById('participant-select');
     const ratingsDiv = document.getElementById('participant-ratings');
+    
+    // Existierende Bewertungen aus der Datenbank (nur im Edit-Modus)
+    {% if is_edit_mode and existing_ratings %}
+        var existingRatings = {{ existing_ratings|tojson }};
+    {% else %}
+        var existingRatings = {};
+    {% endif %}
 
     function updateRatings() {
         const selectedOptions = Array.from(select.selectedOptions);
@@ -95,10 +104,11 @@ document.addEventListener('DOMContentLoaded', function() {
         selectedOptions.forEach(option => {
             const memberId = option.value;
             const memberName = option.text;
+            const existingValue = existingRatings[memberId] || '';
             html += `
                 <div class="participant-rating">
                     <label>${memberName}:</label>
-                    <input type="number" name="individual_rating_${memberId}" min="0" max="10" step="1" class="form-control" style="width: 100px; display: inline-block; margin-left: 10px;" required>
+                    <input type="number" name="individual_rating_${memberId}" min="0" max="10" step="1" class="form-control" style="width: 100px; display: inline-block; margin-left: 10px;" value="${existingValue}" required>
                 </div>
             `;
         });
@@ -109,8 +119,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     select.addEventListener('change', updateRatings);
-    // Initial ausführen, falls bereits vorausgewählt (bei Bearbeitung)
-    updateRatings();
+    updateRatings(); // Initial ausführen
 });
 </script>
 {% endblock %}
