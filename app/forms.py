@@ -119,7 +119,8 @@ class CoachingForm(FlaskForm):
 
     def update_team_member_choices(self, exclude_archiv=False, project_id=None):
         generated_choices = []
-        query = TeamMember.query.join(Team)
+        # EXPLIZITER JOIN WEGEN MEHRDEUTIGKEIT
+        query = TeamMember.query.join(Team, TeamMember.team_id == Team.id)
 
         # 1. Filter nach Projekt (falls vorhanden)
         if project_id:
@@ -164,7 +165,8 @@ class WorkshopForm(FlaskForm):
     def update_participant_choices(self, project_id=None):
         """Füllt die Auswahl der Teilnehmer basierend auf Projekt und Teamleiter-Zugehörigkeit."""
         generated_choices = []
-        query = TeamMember.query.join(Team)
+        # EXPLIZITER JOIN WEGEN MEHRDEUTIGKEIT
+        query = TeamMember.query.join(Team, TeamMember.team_id == Team.id)
 
         # 1. Filter nach Projekt (falls vorhanden)
         if project_id:
