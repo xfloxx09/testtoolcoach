@@ -87,7 +87,6 @@
                         <th>Teilnehmer</th>
                         <th>Bewertung</th>
                         <th>Minuten</th>
-                        <th>Notizen</th>
                         <th>Details</th>
                     </tr>
                 </thead>
@@ -100,7 +99,6 @@
                         <td>{{ workshop.participants.count() }}</td>
                         <td>{{ workshop.overall_rating }}/10</td>
                         <td>{{ workshop.time_spent }}</td>
-                        <td>{{ workshop.notes[:30] + '...' if workshop.notes and workshop.notes|length > 30 else workshop.notes }}</td>
                         <td>
                             <button class="btn btn-sm telekom-button-outline" type="button" data-toggle="collapse" data-target="#workshopDetails{{ workshop.id }}" aria-expanded="false">
                                 Details
@@ -108,7 +106,7 @@
                         </td>
                     </tr>
                     <tr class="collapse" id="workshopDetails{{ workshop.id }}">
-                        <td colspan="8">
+                        <td colspan="7">
                             <div class="card card-body">
                                 <strong>Teilnehmer mit Einzelbewertungen:</strong>
                                 <ul>
@@ -156,7 +154,5 @@
     {% else %}
         <p class="text-center">Keine Workshops gefunden.</p>
     {% endif %}
-
-    {# Der Button wurde nach oben verschoben – hier nicht mehr nötig #}
 </div>
 {% endblock %}
