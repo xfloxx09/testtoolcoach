@@ -108,7 +108,7 @@ def create_user():
     elif request.method == 'POST':
         for field, errors in form.errors.items():
             for error in errors:
-                flash(f"Fehler im Feld '{form[field].label.text if hasattr(form[field], 'label') else field}': {error}', 'danger')
+                flash(f"Fehler im Feld '{form[field].label.text if hasattr(form[field], 'label') else field}': {error}", 'danger')
     return render_template('admin/create_user.html', title='Benutzer erstellen', form=form, config=current_app.config)
 
 @bp.route('/users/edit/<int:user_id>', methods=['GET', 'POST'])
