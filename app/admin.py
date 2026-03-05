@@ -260,6 +260,8 @@ def delete_user(user_id):
 @role_required([ROLE_ADMIN, ROLE_BETRIEBSLEITER])
 def create_team():
     form = TeamForm()
+    # Alle Teamleiter für die Filterung im Template
+    all_team_leaders = User.query.filter(User.role == ROLE_TEAMLEITER).order_by(User.username).all()
     if form.validate_on_submit():
         if form.name.data.strip().upper() == ARCHIV_TEAM_NAME:
             flash(f'Der Teamname "{ARCHIV_TEAM_NAME}" ist für das System reserviert.', 'danger')
@@ -285,7 +287,7 @@ def create_team():
             db.session.rollback()
             current_app.logger.error(f"Fehler beim Erstellen des Teams: {e}")
             flash(f'Fehler beim Erstellen des Teams: {str(e)}', 'danger')
-    return render_template('admin/create_team.html', title='Team erstellen', form=form, config=current_app.config)
+    return render_template('admin/create_team.html', title='Team erstellen', form=form, all_team_leaders=all_team_leaders, config=current_app.config)
 
 @bp.route('/teams/edit/<int:team_id>', methods=['GET', 'POST'])
 @login_required
