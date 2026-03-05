@@ -153,15 +153,13 @@ class WorkshopForm(FlaskForm):
     overall_rating = IntegerField('Gesamtbewertung (0-10)', validators=[DataRequired(), NumberRange(min=0, max=10)])
     time_spent = IntegerField('Zeitaufwand (Minuten)', validators=[DataRequired(), NumberRange(min=1)])
     notes = TextAreaField('Notizen', validators=[Length(max=2000)])
-    # Optional: Projektauswahl für Admins/Betriebsleiter
-    project_id = SelectField('Projekt', coerce=int, choices=[])
+    # project_id wurde entfernt – wird in der Route gesetzt
     submit = SubmitField('Workshop speichern')
 
     def __init__(self, current_user_role=None, current_user_team_ids=None, *args, **kwargs):
         super(WorkshopForm, self).__init__(*args, **kwargs)
         self.current_user_role = current_user_role
         self.current_user_team_ids = current_user_team_ids if current_user_team_ids is not None else []
-        self.project_id.choices = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
 
     def update_participant_choices(self, project_id=None):
         """Füllt die Auswahl der Teilnehmer basierend auf Projekt und Teamleiter-Zugehörigkeit."""
