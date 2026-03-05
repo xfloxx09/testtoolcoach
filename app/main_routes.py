@@ -3,7 +3,7 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from app import db
 from app.models import User, Team, TeamMember, Coaching
-from app.forms import CoachingForm, ProjectLeaderNoteForm
+from app.forms import CoachingForm, ProjectLeaderNoteForm, PasswordChangeForm  # <-- PasswordChangeForm ergänzt
 from app.utils import role_required, ROLE_ADMIN, ROLE_PROJEKTLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_TEAMLEITER, ROLE_ABTEILUNGSLEITER, ARCHIV_TEAM_NAME
 from sqlalchemy import desc, func, or_, and_
 from datetime import datetime, timedelta, timezone
@@ -280,6 +280,23 @@ def add_coaching():
 
     tcap_js = "document.addEventListener('DOMContentLoaded',function(){var s=document.getElementById('coaching_style'),t=document.getElementById('tcap_id_field'),i=document.getElementById('tcap_id');function o(){if(s&&t&&i)if(s.value==='TCAP'){t.style.display='';i.required=!0}else{t.style.display='none';i.required=!1;i.value=''}}s&&t&&i&&(s.addEventListener('change',o),o())});"
     return render_template('main/add_coaching.html', title='Coaching hinzufügen', form=form, tcap_js=tcap_js, is_edit_mode=False, config=current_app.config)
+
+# --- NEUE PROFIL-ROUTE ---
+@bp.route('/profile', methods=['GET', 'POST'])
+@login_required
+def profile():
+    form = PasswordChangeForm()
+    if form.validate_on_submit():
+        # Altes Passwort prüfen
+        if not current_user.check_password(form.old_password.data):
+            flash('Das aktuelle Passwort ist falsch.', 'danger')
+            return redirect(url_for('main.profile'))
+        # Neues Passwort setzen
+        current_user.set_password(form.new_password.data)
+        db.session.commit()
+        flash('Ihr Passwort wurde erfolgreich geändert.', 'success')
+        return redirect(url_for('main.profile'))
+    return render_template('main/profile.html', title='Profil', form=form, config=current_app.config)
 
 # --- Korrigierte Routen: edit_coaching, pl_qm_dashboard, get_member_coaching_trend ---
 
