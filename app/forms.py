@@ -76,7 +76,6 @@ class TeamMemberForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(TeamMemberForm, self).__init__(*args, **kwargs)
-        # Teams werden im Kontext des Projekts gefiltert – das machen wir in der Route
         active_teams = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
         if active_teams:
             self.team_id.choices = [(t.id, t.name) for t in active_teams]
@@ -131,10 +130,9 @@ class CoachingForm(FlaskForm):
             query = query.filter(TeamMember.team_id.in_(self.current_user_team_ids))
         elif self.current_user_role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
             # Normale User (keine Teamleiter) – sollte nicht vorkommen, aber sicherheitshalber
-            # könnte man hier eine leere Liste setzen oder nichts tun.
             pass
 
-        # 3. Archiv ausschließen
+        # 3. Archiv ausschließen (wenn gewünscht)
         if exclude_archiv:
             query = query.filter(Team.name != ARCHIV_TEAM_NAME)
 
@@ -166,13 +164,21 @@ class WorkshopForm(FlaskForm):
         self.project_id.choices = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
 
     def update_participant_choices(self, project_id=None):
-        """Füllt die Auswahl der Teilnehmer basierend auf dem Projekt"""
+        """Füllt die Auswahl der Teilnehmer basierend auf Projekt und Teamleiter-Zugehörigkeit."""
         generated_choices = []
         query = TeamMember.query.join(Team)
+
+        # 1. Filter nach Projekt (falls vorhanden)
         if project_id:
             query = query.filter(Team.project_id == project_id)
-        elif self.current_user_role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
-            pass
+
+        # 2. Für Teamleiter: zusätzlich auf ihre eigenen Teams einschränken
+        if self.current_user_role == ROLE_TEAMLEITER and self.current_user_team_ids:
+            query = query.filter(TeamMember.team_id.in_(self.current_user_team_ids))
+
+        # 3. Archiv immer ausschließen (archivierte Mitarbeiter können nicht an Workshops teilnehmen)
+        query = query.filter(Team.name != ARCHIV_TEAM_NAME)
+
         members = query.order_by(TeamMember.name).all()
         for m in members:
             generated_choices.append((m.id, f"{m.name} ({m.team.name})"))
