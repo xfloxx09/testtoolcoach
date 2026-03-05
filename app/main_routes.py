@@ -281,24 +281,194 @@ def add_coaching():
     tcap_js = "document.addEventListener('DOMContentLoaded',function(){var s=document.getElementById('coaching_style'),t=document.getElementById('tcap_id_field'),i=document.getElementById('tcap_id');function o(){if(s&&t&&i)if(s.value==='TCAP'){t.style.display='';i.required=!0}else{t.style.display='none';i.required=!1;i.value=''}}s&&t&&i&&(s.addEventListener('change',o),o())});"
     return render_template('main/add_coaching.html', title='Coaching hinzufügen', form=form, tcap_js=tcap_js, is_edit_mode=False, config=current_app.config)
 
-# --- Weitere Routen (edit_coaching, pl_qm_dashboard, get_member_coaching_trend) bleiben unverändert ---
-# Bitte den bestehenden Code aus deiner Datei für diese Funktionen übernehmen.
-# Hier aus Platzgründen nur ein Platzhalter.
+# --- Korrigierte Routen: edit_coaching, pl_qm_dashboard, get_member_coaching_trend ---
+
 @bp.route('/coaching/<int:coaching_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_coaching(coaching_id):
-    # ... (unverändert)
-    pass
+    coaching_to_edit = Coaching.query.get_or_404(coaching_id)
+
+    # Berechtigungsprüfung
+    if not (current_user.id == coaching_to_edit.coach_id or current_user.role == ROLE_ADMIN):
+        flash('Sie haben keine Berechtigung, dieses Coaching zu bearbeiten.', 'danger')
+        abort(403)
+
+    # Formular mit Benutzerinformationen initialisieren
+    if current_user.role == ROLE_TEAMLEITER:
+        user_team_ids = [team.id for team in current_user.teams_led]
+    else:
+        user_team_ids = []  # Admins und andere sehen alle Mitglieder
+
+    form = CoachingForm(
+        obj=coaching_to_edit,
+        current_user_role=current_user.role,
+        current_user_team_ids=user_team_ids
+    )
+
+    # Choices für Teammitglieder dynamisch füllen
+    # Beim Bearbeiten wollen wir alle Mitglieder sehen (auch archivierte), damit alte Einträge nicht verloren gehen
+    form.update_team_member_choices(exclude_archiv=False)
+
+    if form.validate_on_submit():
+        try:
+            form.populate_obj(coaching_to_edit)
+            if coaching_to_edit.coaching_style != 'TCAP':
+                coaching_to_edit.tcap_id = None
+            db.session.commit()
+            flash('Coaching erfolgreich aktualisiert!', 'success')
+            # Weiterleitung zur vorherigen Seite oder Dashboard
+            return redirect(request.args.get('next') or url_for('main.index'))
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"Update coaching ID {coaching_id} error: {e}")
+            flash(f'Fehler: {str(e)}', 'danger')
+
+    # Bei GET oder wenn Validierung fehlschlägt: aktuelles Teammitglied vorauswählen
+    if request.method == 'GET':
+        form.team_member_id.data = coaching_to_edit.team_member_id
+
+    # JavaScript für TCAP-Feld
+    tcap_js = """document.addEventListener('DOMContentLoaded',function(){var s=document.getElementById('coaching_style'),t=document.getElementById('tcap_id_field'),i=document.getElementById('tcap_id');function o(){if(s&&t&&i)if(s.value==='TCAP'){t.style.display='';i.required=!0}else{t.style.display='none';i.required=!1}}s&&t&&i&&(s.addEventListener('change',o),o())});"""
+
+    return render_template('main/add_coaching.html',
+                           title=f'Coaching ID {coaching_to_edit.id} Bearbeiten',
+                           form=form,
+                           is_edit_mode=True,
+                           coaching=coaching_to_edit,
+                           coaching_id_being_edited=coaching_to_edit.id,
+                           tcap_js=tcap_js,
+                           config=current_app.config)
+
 
 @bp.route('/coaching_review_dashboard', methods=['GET', 'POST'])
 @login_required
 @role_required([ROLE_PROJEKTLEITER, ROLE_QM, ROLE_ABTEILUNGSLEITER])
 def pl_qm_dashboard():
-    # ... (unverändert)
-    pass
+    page = request.args.get('page', 1, type=int)
+    selected_team_id_filter_str = request.args.get('team_id_filter', None)
+
+    coachings_query = Coaching.query.join(TeamMember).join(Team).filter(Team.name != ARCHIV_TEAM_NAME)
+    coachings_paginated = coachings_query.order_by(desc(Coaching.coaching_date)).paginate(page=page, per_page=10, error_out=False)
+    note_form = ProjectLeaderNoteForm()
+    title = "Notizen Dashboard"
+    if current_user.role == ROLE_QM:
+        title = "Quality Coach Dashboard"
+    elif current_user.role == ROLE_PROJEKTLEITER:
+        title = "Projektleiter Dashboard"
+    elif current_user.role == ROLE_ABTEILUNGSLEITER:
+        title = "Abteilungsleiter Dashboard"
+
+    if request.method == 'POST' and 'submit_note' in request.form:
+        form_val = ProjectLeaderNoteForm(request.form)
+        coaching_id_str = request.form.get('coaching_id')
+        if not coaching_id_str or not coaching_id_str.isdigit():
+            flash("Gültige Coaching-ID fehlt.", 'danger')
+        elif form_val.validate():
+            try:
+                coaching = Coaching.query.get_or_404(int(coaching_id_str))
+                coaching.project_leader_notes = form_val.notes.data
+                db.session.commit()
+                flash(f'Notiz für Coaching ID {coaching_id_str} gespeichert.', 'success')
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f"Note save error: {e}")
+                flash('Fehler Notizspeicherung.', 'danger')
+        else:
+            for f, errs in form_val.errors.items():
+                flash(f"Validierungsfehler '{form_val[f].label.text}': {'; '.join(errs)}", 'danger')
+        return redirect(url_for('main.pl_qm_dashboard',
+                                page=request.args.get('page', 1, type=int),
+                                team_id_filter=selected_team_id_filter_str))
+
+    all_teams_data = []
+    for team_obj_stat_loop in Team.query.filter(Team.name != ARCHIV_TEAM_NAME).all():
+        stats = db.session.query(
+            func.coalesce(func.avg(Coaching.performance_mark * 10.0), 0).label('avg_perf'),
+            func.coalesce(func.sum(Coaching.time_spent), 0).label('total_time'),
+            func.coalesce(func.count(Coaching.id), 0).label('num_coachings')
+        ).join(TeamMember, Coaching.team_member_id == TeamMember.id)\
+         .filter(TeamMember.team_id == team_obj_stat_loop.id).first()
+        all_teams_data.append({
+            'id': team_obj_stat_loop.id, 'name': team_obj_stat_loop.name,
+            'num_coachings': stats.num_coachings if stats else 0,
+            'avg_score': round(stats.avg_perf, 2) if stats else 0,
+            'total_time': stats.total_time if stats else 0
+        })
+    sorted_data = sorted(all_teams_data, key=lambda x: (x.get('avg_score', 0), x.get('num_coachings', 0)), reverse=True)
+    top_3 = sorted_data[:3]
+    teams_c = [t for t in all_teams_data if t.get('num_coachings', 0) > 0]
+    flop_3 = sorted(teams_c, key=lambda x: (x.get('avg_score', 0), -x.get('num_coachings', 0)))[:3] if teams_c else []
+
+    all_teams_for_filter_dropdown = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
+    selected_team_object_for_cards = None
+    members_data_for_cards = []
+
+    if selected_team_id_filter_str and selected_team_id_filter_str.isdigit():
+        selected_team_id = int(selected_team_id_filter_str)
+        selected_team_object_for_cards = Team.query.get(selected_team_id)
+        if selected_team_object_for_cards:
+            for member in selected_team_object_for_cards.members.all():
+                member_coachings_list = Coaching.query.filter_by(team_member_id=member.id).all()
+                avg_score_val = sum(c.overall_score for c in member_coachings_list) / len(member_coachings_list) if member_coachings_list else 0.0
+                leitfaden_adherences_percentages = [
+                    c.leitfaden_erfuellung_prozent for c in member_coachings_list if c.leitfaden_erfuellung_prozent is not None
+                ]
+                avg_leitfaden_adherence_val = sum(leitfaden_adherences_percentages) / len(leitfaden_adherences_percentages) if leitfaden_adherences_percentages else 0.0
+                total_coaching_time_minutes_val = sum(c.time_spent for c in member_coachings_list if c.time_spent is not None)
+                hours = total_coaching_time_minutes_val // 60
+                minutes = total_coaching_time_minutes_val % 60
+                formatted_time_str = f"{hours} Std. {minutes} Min."
+                members_data_for_cards.append({
+                    'id': member.id, 'name': member.name,
+                    'avg_score': round(avg_score_val, 2),
+                    'avg_leitfaden_adherence': round(avg_leitfaden_adherence_val, 1),
+                    'total_coachings': len(member_coachings_list),
+                    'raw_total_coaching_time': total_coaching_time_minutes_val,
+                    'formatted_total_coaching_time': formatted_time_str
+                })
+
+    return render_template('main/projektleiter_dashboard.html',
+                           title=title,
+                           coachings_paginated=coachings_paginated,
+                           note_form=note_form,
+                           top_3_teams=top_3,
+                           flop_3_teams=flop_3,
+                           all_teams_for_filter=all_teams_for_filter_dropdown,
+                           selected_team_id_filter=selected_team_id_filter_str,
+                           selected_team_object_for_cards=selected_team_object_for_cards,
+                           members_data_for_cards=members_data_for_cards,
+                           config=current_app.config)
+
 
 @bp.route('/api/member_coaching_trend', methods=['GET'])
 @login_required
 def get_member_coaching_trend():
-    # ... (unverändert)
-    pass
+    team_member_id_str = request.args.get('team_member_id')
+    count_str = request.args.get('count', '10')
+    if not team_member_id_str:
+        return jsonify({"error": "Team Member ID (team_member_id) is required"}), 400
+    try:
+        team_member_id = int(team_member_id_str)
+    except ValueError:
+        return jsonify({"error": "Invalid Team Member ID format"}), 400
+    query = Coaching.query.filter_by(team_member_id=team_member_id).order_by(Coaching.coaching_date.desc())
+    if count_str.lower() != 'all':
+        try:
+            count = int(count_str)
+            if count <= 0:
+                return jsonify({"error": "Count must be a positive integer or 'all'"}), 400
+            query = query.limit(count)
+        except ValueError:
+            return jsonify({"error": "Invalid count format"}), 400
+    recent_coachings = query.all()
+    recent_coachings.reverse()
+    if not recent_coachings:
+        return jsonify({"labels": [], "scores": [], "dates": []})
+    labels = []
+    scores = []
+    dates = []
+    for i, coaching in enumerate(recent_coachings):
+        labels.append(f"Coaching {i+1}")
+        scores.append(coaching.overall_score if coaching.overall_score is not None else 0)
+        dates.append(coaching.coaching_date.strftime('%d.%m.%y'))
+    return jsonify({"labels": labels, "scores": scores, "dates": dates})
