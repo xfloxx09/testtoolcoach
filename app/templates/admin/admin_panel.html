@@ -11,6 +11,7 @@
     </div>
     <div class="card-body">
         <form method="GET" action="{{ url_for('admin.panel') }}" class="mb-3">
+            <!-- Eigene Filterfelder -->
             <div class="form-row">
                 <div class="col-md-3">
                     <select name="user_project" class="form-control form-control-sm">
@@ -35,6 +36,15 @@
                     <button type="submit" class="btn btn-sm telekom-button btn-block">Filtern</button>
                 </div>
             </div>
+
+            <!-- Hidden-Felder für andere Filter, um sie zu erhalten -->
+            <input type="hidden" name="team_project" value="{{ filter_params.team_project or '' }}">
+            <input type="hidden" name="team_search" value="{{ filter_params.team_search or '' }}">
+            <input type="hidden" name="member_project" value="{{ filter_params.member_project or '' }}">
+            <input type="hidden" name="member_team" value="{{ filter_params.member_team or '' }}">
+            <input type="hidden" name="member_search" value="{{ filter_params.member_search or '' }}">
+            <input type="hidden" name="archiv_search" value="{{ filter_params.archiv_search or '' }}">
+            <!-- Paginierungsseiten zurücksetzen -->
             <input type="hidden" name="page_users" value="1">
             <input type="hidden" name="page_teams" value="1">
             <input type="hidden" name="page_members" value="1">
@@ -69,19 +79,19 @@
             <nav>
                 <ul class="pagination pagination-sm justify-content-center">
                     {% if users_paginated.has_prev %}
-                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_users=users_paginated.prev_num, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search) }}">Vorherige</a></li>
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_users=users_paginated.prev_num, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search, team_project=filter_params.team_project, team_search=filter_params.team_search, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search, archiv_search=filter_params.archiv_search) }}">Vorherige</a></li>
                     {% endif %}
                     {% for page_num in users_paginated.iter_pages() %}
                         {% if page_num %}
                             <li class="page-item {% if users_paginated.page == page_num %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('admin.panel', page_users=page_num, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('admin.panel', page_users=page_num, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search, team_project=filter_params.team_project, team_search=filter_params.team_search, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search, archiv_search=filter_params.archiv_search) }}">{{ page_num }}</a>
                             </li>
                         {% else %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
                         {% endif %}
                     {% endfor %}
                     {% if users_paginated.has_next %}
-                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_users=users_paginated.next_num, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search) }}">Nächste</a></li>
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_users=users_paginated.next_num, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search, team_project=filter_params.team_project, team_search=filter_params.team_search, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search, archiv_search=filter_params.archiv_search) }}">Nächste</a></li>
                     {% endif %}
                 </ul>
             </nav>
@@ -118,7 +128,19 @@
                     <button type="submit" class="btn btn-sm telekom-button btn-block">Filtern</button>
                 </div>
             </div>
+
+            <!-- Hidden-Felder für andere Filter -->
+            <input type="hidden" name="user_project" value="{{ filter_params.user_project or '' }}">
+            <input type="hidden" name="user_role" value="{{ filter_params.user_role or '' }}">
+            <input type="hidden" name="user_search" value="{{ filter_params.user_search or '' }}">
+            <input type="hidden" name="member_project" value="{{ filter_params.member_project or '' }}">
+            <input type="hidden" name="member_team" value="{{ filter_params.member_team or '' }}">
+            <input type="hidden" name="member_search" value="{{ filter_params.member_search or '' }}">
+            <input type="hidden" name="archiv_search" value="{{ filter_params.archiv_search or '' }}">
+            <input type="hidden" name="page_users" value="1">
             <input type="hidden" name="page_teams" value="1">
+            <input type="hidden" name="page_members" value="1">
+            <input type="hidden" name="page_archiv" value="1">
         </form>
 
         {% if team_filter_active or teams_paginated.items %}
@@ -147,19 +169,19 @@
             <nav>
                 <ul class="pagination pagination-sm justify-content-center">
                     {% if teams_paginated.has_prev %}
-                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_teams=teams_paginated.prev_num, team_project=filter_params.team_project, team_search=filter_params.team_search) }}">Vorherige</a></li>
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_teams=teams_paginated.prev_num, team_project=filter_params.team_project, team_search=filter_params.team_search, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search, archiv_search=filter_params.archiv_search) }}">Vorherige</a></li>
                     {% endif %}
                     {% for page_num in teams_paginated.iter_pages() %}
                         {% if page_num %}
                             <li class="page-item {% if teams_paginated.page == page_num %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('admin.panel', page_teams=page_num, team_project=filter_params.team_project, team_search=filter_params.team_search) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('admin.panel', page_teams=page_num, team_project=filter_params.team_project, team_search=filter_params.team_search, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search, archiv_search=filter_params.archiv_search) }}">{{ page_num }}</a>
                             </li>
                         {% else %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
                         {% endif %}
                     {% endfor %}
                     {% if teams_paginated.has_next %}
-                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_teams=teams_paginated.next_num, team_project=filter_params.team_project, team_search=filter_params.team_search) }}">Nächste</a></li>
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_teams=teams_paginated.next_num, team_project=filter_params.team_project, team_search=filter_params.team_search, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search, archiv_search=filter_params.archiv_search) }}">Nächste</a></li>
                     {% endif %}
                 </ul>
             </nav>
@@ -204,7 +226,17 @@
                     <button type="submit" class="btn btn-sm telekom-button btn-block">Filtern</button>
                 </div>
             </div>
+
+            <input type="hidden" name="user_project" value="{{ filter_params.user_project or '' }}">
+            <input type="hidden" name="user_role" value="{{ filter_params.user_role or '' }}">
+            <input type="hidden" name="user_search" value="{{ filter_params.user_search or '' }}">
+            <input type="hidden" name="team_project" value="{{ filter_params.team_project or '' }}">
+            <input type="hidden" name="team_search" value="{{ filter_params.team_search or '' }}">
+            <input type="hidden" name="archiv_search" value="{{ filter_params.archiv_search or '' }}">
+            <input type="hidden" name="page_users" value="1">
+            <input type="hidden" name="page_teams" value="1">
             <input type="hidden" name="page_members" value="1">
+            <input type="hidden" name="page_archiv" value="1">
         </form>
 
         {% if member_filter_active or members_paginated.items %}
@@ -229,19 +261,19 @@
             <nav>
                 <ul class="pagination pagination-sm justify-content-center">
                     {% if members_paginated.has_prev %}
-                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_members=members_paginated.prev_num, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search) }}">Vorherige</a></li>
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_members=members_paginated.prev_num, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search, team_project=filter_params.team_project, team_search=filter_params.team_search, archiv_search=filter_params.archiv_search) }}">Vorherige</a></li>
                     {% endif %}
                     {% for page_num in members_paginated.iter_pages() %}
                         {% if page_num %}
                             <li class="page-item {% if members_paginated.page == page_num %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('admin.panel', page_members=page_num, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search) }}">{{ page_num }}</a>
+                                <a class="page-link" href="{{ url_for('admin.panel', page_members=page_num, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search, team_project=filter_params.team_project, team_search=filter_params.team_search, archiv_search=filter_params.archiv_search) }}">{{ page_num }}</a>
                             </li>
                         {% else %}
                             <li class="page-item disabled"><span class="page-link">...</span></li>
                         {% endif %}
                     {% endfor %}
                     {% if members_paginated.has_next %}
-                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_members=members_paginated.next_num, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search) }}">Nächste</a></li>
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_members=members_paginated.next_num, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search, team_project=filter_params.team_project, team_search=filter_params.team_search, archiv_search=filter_params.archiv_search) }}">Nächste</a></li>
                     {% endif %}
                 </ul>
             </nav>
@@ -273,6 +305,18 @@
                         <button type="submit" class="btn btn-sm btn-secondary btn-block">Filtern</button>
                     </div>
                 </div>
+
+                <input type="hidden" name="user_project" value="{{ filter_params.user_project or '' }}">
+                <input type="hidden" name="user_role" value="{{ filter_params.user_role or '' }}">
+                <input type="hidden" name="user_search" value="{{ filter_params.user_search or '' }}">
+                <input type="hidden" name="team_project" value="{{ filter_params.team_project or '' }}">
+                <input type="hidden" name="team_search" value="{{ filter_params.team_search or '' }}">
+                <input type="hidden" name="member_project" value="{{ filter_params.member_project or '' }}">
+                <input type="hidden" name="member_team" value="{{ filter_params.member_team or '' }}">
+                <input type="hidden" name="member_search" value="{{ filter_params.member_search or '' }}">
+                <input type="hidden" name="page_users" value="1">
+                <input type="hidden" name="page_teams" value="1">
+                <input type="hidden" name="page_members" value="1">
                 <input type="hidden" name="page_archiv" value="1">
             </form>
 
@@ -306,19 +350,19 @@
                 <nav>
                     <ul class="pagination pagination-sm justify-content-center">
                         {% if archiv_paginated.has_prev %}
-                            <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_archiv=archiv_paginated.prev_num, archiv_search=filter_params.archiv_search) }}">Vorherige</a></li>
+                            <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_archiv=archiv_paginated.prev_num, archiv_search=filter_params.archiv_search, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search, team_project=filter_params.team_project, team_search=filter_params.team_search, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search) }}">Vorherige</a></li>
                         {% endif %}
                         {% for page_num in archiv_paginated.iter_pages() %}
                             {% if page_num %}
                                 <li class="page-item {% if archiv_paginated.page == page_num %}active{% endif %}">
-                                    <a class="page-link" href="{{ url_for('admin.panel', page_archiv=page_num, archiv_search=filter_params.archiv_search) }}">{{ page_num }}</a>
+                                    <a class="page-link" href="{{ url_for('admin.panel', page_archiv=page_num, archiv_search=filter_params.archiv_search, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search, team_project=filter_params.team_project, team_search=filter_params.team_search, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search) }}">{{ page_num }}</a>
                                 </li>
                             {% else %}
                                 <li class="page-item disabled"><span class="page-link">...</span></li>
                             {% endif %}
                         {% endfor %}
                         {% if archiv_paginated.has_next %}
-                            <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_archiv=archiv_paginated.next_num, archiv_search=filter_params.archiv_search) }}">Nächste</a></li>
+                            <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_archiv=archiv_paginated.next_num, archiv_search=filter_params.archiv_search, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search, team_project=filter_params.team_project, team_search=filter_params.team_search, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search) }}">Nächste</a></li>
                         {% endif %}
                     </ul>
                 </nav>
