@@ -253,6 +253,12 @@
                     <td>{{ member.team.project_ref.name if member.team.project_ref else '-' }}</td>
                     <td>
                         <a href="{{ url_for('admin.edit_team_member', member_id=member.id) }}" class="btn btn-xs btn-outline-secondary">Bearbeiten</a>
+                        <form action="{{ url_for('admin.move_to_archiv', member_id=member.id) }}" method="POST" style="display: inline-block;">
+                            <button type="submit" class="btn btn-xs btn-warning" onclick="return confirm('In Archiv verschieben? Das Mitglied wird aus diesem Team entfernt, aber Daten bleiben erhalten.')">Ins Archiv</button>
+                        </form>
+                        <form action="{{ url_for('admin.delete_team_member_permanently', member_id=member.id) }}" method="POST" style="display: inline-block;" onsubmit="return confirm('ACHTUNG: Das Mitglied und ALLE zugehörigen Coachings werden ENDGÜLTIG gelöscht. Fortfahren?');">
+                            <button type="submit" class="btn btn-xs btn-danger">Endgültig löschen</button>
+                        </form>
                     </td>
                 </tr>
                 {% endfor %}
@@ -358,6 +364,9 @@
                        <td>{{ member.original_project.name if member.original_project else '-' }}</td>
                        <td>
                            <a href="{{ url_for('admin.edit_team_member', member_id=member.id) }}" class="btn btn-xs btn-outline-success">Reaktivieren / Bearbeiten</a>
+                           <form action="{{ url_for('admin.delete_team_member_permanently', member_id=member.id) }}" method="POST" style="display: inline-block;" onsubmit="return confirm('ACHTUNG: Das Mitglied und ALLE zugehörigen Coachings werden ENDGÜLTIG gelöscht. Fortfahren?');">
+                               <button type="submit" class="btn btn-xs btn-danger">Endgültig löschen</button>
+                           </form>
                        </td>
                     </tr>
                     {% else %}
