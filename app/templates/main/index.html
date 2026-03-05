@@ -1,17 +1,15 @@
-{# app/templates/main/index.html - With extended period filter options #}
+{# app/templates/main/index.html - Coaching Dashboard #}
 {% extends "base.html" %}
 
 {% block head_extra %}
-    {# Font Awesome for icons - Add this if you haven't already in base.html or globally #}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 {% endblock %}
 
 {% block content %}
     <h2>{{ title }}</h2>
 
-    <form method="GET" action="{{ url_for('main.index') }}" id="filterForm" class="mb-4">
+    <form method="GET" action="{{ url_for('main.coaching_dashboard') }}" id="filterForm" class="mb-4">
         <div class="form-row align-items-end">
-            {# Zeitraum Filter #}
             <div class="col-md-auto">
                 <div class="form-group mr-2">
                     <label for="period_filter" class="mr-2">Zeitraum:</label>
@@ -34,7 +32,6 @@
                 </div>
             </div>
             
-            {# Team Filter #}
             <div class="col-md-auto">
                 <div class="form-group mr-2">
                     <label for="team_filter" class="mr-2">Team:</label>
@@ -60,19 +57,18 @@
             </div>
             <div class="col-md-auto">
                  <div class="form-group">
-                    <a href="{{ url_for('main.index') }}" class="btn btn-secondary btn-sm">Filter zurücksetzen</a>
+                    <a href="{{ url_for('main.coaching_dashboard') }}" class="btn btn-secondary btn-sm">Filter zurücksetzen</a>
                  </div>
             </div>
         </div>
     </form>
 
-    {# INFO-BOXES - UPDATED TO USE GLOBAL STATS #}
     <div class="row mb-4">
         <div class="col-md-6 mb-3">
             <div class="card text-white telekom-bg-magenta info-box h-100">
                 <div class="card-body text-center d-flex flex-column justify-content-center">
                     <h5 class="card-title">Coaching Sessions (Gesamt)</h5>
-                    <p class="card-text display-4">{{ global_total_coachings_count }}</p> {# CHANGED #}
+                    <p class="card-text display-4">{{ global_total_coachings_count }}</p>
                     <small>(im ausgewählten Zeitraum)</small>
                 </div>
             </div>
@@ -81,7 +77,7 @@
             <div class="card text-white telekom-bg-magenta info-box h-100">
                 <div class="card-body text-center d-flex flex-column justify-content-center">
                     <h5 class="card-title">Stunden gecoacht (Gesamt)</h5>
-                    <p class="card-text display-4">{{ global_time_coached_display.split('(')[0].strip() if global_time_coached_display else '0 Std. 0 Min.' }}</p> {# CHANGED #}
+                    <p class="card-text display-4">{{ global_time_coached_display.split('(')[0].strip() if global_time_coached_display else '0 Std. 0 Min.' }}</p>
                     <small>({{ global_time_coached_display.split('(')[1].split(')')[0] if global_time_coached_display and '(' in global_time_coached_display else '0 Min.' }} gesamt)</small>
                 </div>
             </div>
@@ -100,10 +96,9 @@
         </div>
         <div class="col-md-6 mb-4">
             <div class="card h-100">
-                {# UPDATED CHART TITLE HERE #}
                 <div class="card-header telekom-bg-magenta text-white">Gesamte Coaching-Dauer / Team (Min.)</div>
                 <div class="card-body d-flex align-items-center justify-content-center p-2">
-                    <canvas id="timeSpentChart" style="max-height: 300px; width: 100%;"></canvas> {# UPDATED ID FOR CLARITY #}
+                    <canvas id="timeSpentChart" style="max-height: 300px; width: 100%;"></canvas>
                 </div>
             </div>
         </div>
@@ -133,7 +128,7 @@
             <h3 class="mb-0">Coaching Liste (Angezeigt: {{ coachings_paginated.items|length if coachings_paginated and coachings_paginated.items else 0 }}, Gesamt gefiltert: {{ total_coachings if total_coachings is not none else 0 }})</h3>
         </div>
         <div class="col-md-5 col-lg-4">
-            <form method="GET" action="{{ url_for('main.index') }}" class="form-inline float-md-right w-100" id="searchFormInTitle">
+            <form method="GET" action="{{ url_for('main.coaching_dashboard') }}" class="form-inline float-md-right w-100" id="searchFormInTitle">
                 <input type="hidden" name="period" value="{{ current_period_filter }}">
                 <input type="hidden" name="team" value="{{ current_team_id_filter }}">
                 
@@ -142,7 +137,7 @@
                     <div class="input-group-append">
                         <button type="submit" class="btn telekom-button btn-sm">Suchen</button>
                         {% if current_search_term %}
-                            <a href="{{ url_for('main.index', period=current_period_filter, team=current_team_id_filter) }}" class="btn btn-outline-secondary btn-sm" title="Suche zurücksetzen">×</a>
+                            <a href="{{ url_for('main.coaching_dashboard', period=current_period_filter, team=current_team_id_filter) }}" class="btn btn-outline-secondary btn-sm" title="Suche zurücksetzen">×</a>
                         {% endif %}
                     </div>
                 </div>
@@ -240,7 +235,7 @@
         <nav aria-label="Coaching Navigation" class="mt-4">
             <ul class="pagination justify-content-center">
                 {% if coachings_paginated.has_prev %}
-                    <li class="page-item"><a class="page-link telekom-page-link" href="{{ url_for('main.index', page=coachings_paginated.prev_num, period=current_period_filter, team=current_team_id_filter, search=current_search_term) }}">Vorherige</a></li>
+                    <li class="page-item"><a class="page-link telekom-page-link" href="{{ url_for('main.coaching_dashboard', page=coachings_paginated.prev_num, period=current_period_filter, team=current_team_id_filter, search=current_search_term) }}">Vorherige</a></li>
                 {% else %}
                     <li class="page-item disabled"><span class="page-link">Vorherige</span></li>
                 {% endif %}
@@ -249,14 +244,14 @@
                         {% if coachings_paginated.page == page_num %}
                             <li class="page-item active"><span class="page-link telekom-page-active">{{ page_num }}</span></li>
                         {% else %}
-                            <li class="page-item"><a class="page-link telekom-page-link" href="{{ url_for('main.index', page=page_num, period=current_period_filter, team=current_team_id_filter, search=current_search_term) }}">{{ page_num }}</a></li>
+                            <li class="page-item"><a class="page-link telekom-page-link" href="{{ url_for('main.coaching_dashboard', page=page_num, period=current_period_filter, team=current_team_id_filter, search=current_search_term) }}">{{ page_num }}</a></li>
                         {% endif %}
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">...</span></li>
                     {% endif %}
                 {% endfor %} 
                 {% if coachings_paginated.has_next %}
-                    <li class="page-item"><a class="page-link telekom-page-link" href="{{ url_for('main.index', page=coachings_paginated.next_num, period=current_period_filter, team=current_team_id_filter, search=current_search_term) }}">Nächste</a></li>
+                    <li class="page-item"><a class="page-link telekom-page-link" href="{{ url_for('main.coaching_dashboard', page=coachings_paginated.next_num, period=current_period_filter, team=current_team_id_filter, search=current_search_term) }}">Nächste</a></li>
                 {% else %}
                     <li class="page-item disabled"><span class="page-link">Nächste</span></li>
                 {% endif %}
@@ -266,11 +261,11 @@
         <p class="text-center mt-3">Keine Coachings gefunden, die den aktuellen Filtern entsprechen.</p>
     {% endif %} 
 
-    {% set can_add_coaching_roles = [config.ROLE_TEAMLEITER, config.ROLE_QM, config.ROLE_SALESCOACH, config.ROLE_TRAINER, config.ROLE_ADMIN] %}
+    {% set can_add_coaching_roles = ['Teamleiter', 'Qualitätsmanager', 'SalesCoach', 'Trainer', 'Admin'] %}
     {% if current_user.role in can_add_coaching_roles %}
-    <a href="{{ url_for('main.add_coaching') }}" class="btn telekom-button mt-3">Neues Coaching hinzufügen</a>
-    {% endif %} 
-    
+        <a href="{{ url_for('main.add_coaching') }}" class="btn telekom-button mt-3">Neues Coaching hinzufügen</a>
+    {% endif %}
+
 {% endblock %}
 
 {% block scripts %}
@@ -285,13 +280,13 @@
         else { console.warn("ChartAnnotation Plugin wurde nicht geladen."); }
         
         const chartAvgPerformanceCtx = document.getElementById('avgPerfByTeamChart');
-        const timeSpentChartCtx = document.getElementById('timeSpentChart'); // UPDATED ID
+        const timeSpentChartCtx = document.getElementById('timeSpentChart');
         const chartCoachingsDoneCtx = document.getElementById('coachingsDoneByTeamChart');
         const subjectDistributionCtx = document.getElementById('subjectDistributionChart');
         
         const chartLabels = {{ chart_labels|tojson|safe }};
         const chartAvgPerformanceData = {{ chart_avg_performance_mark_percentage|tojson|safe }};
-        const chartTotalTimeData = {{ chart_total_time_spent|tojson|safe }}; // UPDATED: Use total time
+        const chartTotalTimeData = {{ chart_total_time_spent|tojson|safe }};
         const chartCoachingsDoneData = {{ chart_coachings_done|tojson|safe }};
         const subjectChartLabels = {{ subject_chart_labels|tojson|safe }};
         const subjectChartValues = {{ subject_chart_values|tojson|safe }};
@@ -337,7 +332,6 @@
             } 
         };
 
-        // Chart 1: Average Performance by Team
         drawChartWithMessage(chartAvgPerformanceCtx, { 
             type: 'bar', 
             data: { 
@@ -382,7 +376,7 @@
                                 borderDash: [6, 6], 
                                 label: { 
                                     content: 'Benchmark ({{ config.PERFORMANCE_BENCHMARK or 80 }}%)', 
-                                    enabled: false, // Set to true to show label
+                                    enabled: false,
                                     position: 'end', 
                                     backgroundColor: 'rgba(0,100,0,0.7)', 
                                     color: 'white', 
@@ -395,21 +389,13 @@
             } 
         });
 
-        // Chart 2: Total Time Spent by Team (UPDATED)
-        let maxTotalTime = 0; 
-        if (chartTotalTimeData && chartTotalTimeData.length > 0) { 
-            const numericTotalTimeData = chartTotalTimeData.filter(d => typeof d === 'number' && !isNaN(d)); 
-            if (numericTotalTimeData.length > 0) { 
-                maxTotalTime = Math.max(...numericTotalTimeData); 
-            } 
-        }
         drawChartWithMessage(timeSpentChartCtx, { 
             type: 'bar', 
             data: { 
                 labels: chartLabels, 
                 datasets: [{ 
-                    label: 'Gesamtdauer (Min.)', // UPDATED LABEL
-                    data: chartTotalTimeData, // UPDATED DATA SOURCE
+                    label: 'Gesamtdauer (Min.)',
+                    data: chartTotalTimeData,
                     backgroundColor: telekomMagenta, 
                     borderColor: telekomMagentaBorder, 
                     borderWidth: 1 
@@ -421,27 +407,19 @@
                     ...commonChartOptions.scales, 
                     y: { 
                         ...commonChartOptions.scales.y, 
-                        max: maxTotalTime > 0 ? Math.ceil(maxTotalTime * 1.2) + 5 : 30 // Dynamic Y-axis max
+                        max: chartTotalTimeData.length > 0 ? Math.ceil(Math.max(...chartTotalTimeData) * 1.2) + 5 : 30
                     } 
                 }, 
                 plugins: { 
                     ...commonChartOptions.plugins, 
                     datalabels: {
                         ...commonChartOptions.plugins.datalabels, 
-                        formatter: (value) => Math.round(value) + ' Min' // Keep Min suffix
+                        formatter: (value) => Math.round(value) + ' Min'
                     } 
                 } 
             } 
         });
 
-        // Chart 3: Coachings Done by Team
-        let maxCoachingsDone = 0; 
-        if (chartCoachingsDoneData && chartCoachingsDoneData.length > 0) { 
-            const numericCoachingsDoneData = chartCoachingsDoneData.filter(d => typeof d === 'number' && !isNaN(d)); 
-            if (numericCoachingsDoneData.length > 0) { 
-                maxCoachingsDone = Math.max(...numericCoachingsDoneData); 
-            } 
-        }
         drawChartWithMessage(chartCoachingsDoneCtx, { 
             type: 'bar', 
             data: { 
@@ -461,13 +439,12 @@
                     y: { 
                         ...commonChartOptions.scales.y, 
                         ticks: { ...commonChartOptions.scales.y.ticks, stepSize: 1, precision: 0 }, 
-                        max: maxCoachingsDone > 0 ? Math.ceil(maxCoachingsDone * 1.2) + 1 : 5 
+                        max: chartCoachingsDoneData.length > 0 ? Math.ceil(Math.max(...chartCoachingsDoneData) * 1.2) + 1 : 5 
                     } 
                 } 
             } 
         });
 
-        // Chart 4: Subject Distribution
         drawChartWithMessage(subjectDistributionCtx, { 
             type: 'pie', 
             data: { 
