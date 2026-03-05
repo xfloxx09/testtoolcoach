@@ -1,1 +1,116 @@
+{% extends "base.html" %}
 
+{% block head_extra %}
+<style>
+    .participant-rating {
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #2b2b2b;
+        border-radius: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h2>{{ title }}</h2>
+
+    <form method="POST" action="{{ url_for('main.add_workshop') }}" novalidate>
+        {{ form.hidden_tag() }}
+
+        <div class="form-group">
+            {{ form.title.label(class="form-control-label") }}
+            {{ form.title(class="form-control " + ("is-invalid" if form.title.errors else ""), placeholder="z.B. 'Einführung in Verkaufstechniken'") }}
+            {% if form.title.errors %}
+                <div class="invalid-feedback">
+                    {% for error in form.title.errors %}<span>{{ error }}</span>{% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            {{ form.team_member_ids.label(class="form-control-label") }}
+            {{ form.team_member_ids(class="form-control custom-select " + ("is-invalid" if form.team_member_ids.errors else ""), multiple=True, size=8, id="participant-select") }}
+            <small class="form-text text-muted">Halte Strg (Cmd) gedrückt, um mehrere Teilnehmer auszuwählen.</small>
+            {% if form.team_member_ids.errors %}
+                <div class="invalid-feedback">
+                    {% for error in form.team_member_ids.errors %}<span>{{ error }}</span>{% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div id="participant-ratings" class="mb-3">
+            <p class="text-muted">Bewertungen für ausgewählte Teilnehmer (0-10):</p>
+        </div>
+
+        <div class="form-row">
+            <div class="form-group col-md-6">
+                {{ form.overall_rating.label(class="form-control-label") }}
+                {{ form.overall_rating(class="form-control " + ("is-invalid" if form.overall_rating.errors else ""), placeholder="0-10") }}
+                {% if form.overall_rating.errors %}
+                    <div class="invalid-feedback">
+                        {% for error in form.overall_rating.errors %}<span>{{ error }}</span>{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+            <div class="form-group col-md-6">
+                {{ form.time_spent.label(class="form-control-label") }}
+                {{ form.time_spent(class="form-control " + ("is-invalid" if form.time_spent.errors else ""), placeholder="Minuten") }}
+                {% if form.time_spent.errors %}
+                    <div class="invalid-feedback">
+                        {% for error in form.time_spent.errors %}<span>{{ error }}</span>{% endfor %}
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="form-group">
+            {{ form.notes.label(class="form-control-label") }}
+            {{ form.notes(class="form-control " + ("is-invalid" if form.notes.errors else ""), rows=4, placeholder="Notizen zum Workshop...") }}
+            {% if form.notes.errors %}
+                <div class="invalid-feedback">
+                    {% for error in form.notes.errors %}<span>{{ error }}</span>{% endfor %}
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="form-group">
+            <button type="submit" class="btn telekom-button">Workshop speichern</button>
+            <a href="{{ url_for('main.workshop_dashboard') }}" class="btn btn-secondary ml-2">Abbrechen</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const select = document.getElementById('participant-select');
+    const ratingsDiv = document.getElementById('participant-ratings');
+
+    function updateRatings() {
+        const selectedOptions = Array.from(select.selectedOptions);
+        let html = '<p class="text-muted">Bewertungen für ausgewählte Teilnehmer (0-10):</p>';
+        selectedOptions.forEach(option => {
+            const memberId = option.value;
+            const memberName = option.text;
+            html += `
+                <div class="participant-rating">
+                    <label>${memberName}:</label>
+                    <input type="number" name="individual_rating_${memberId}" min="0" max="10" step="1" class="form-control" style="width: 100px; display: inline-block; margin-left: 10px;" required>
+                </div>
+            `;
+        });
+        if (selectedOptions.length === 0) {
+            html = '<p class="text-muted">Bitte wählen Sie Teilnehmer aus.</p>';
+        }
+        ratingsDiv.innerHTML = html;
+    }
+
+    select.addEventListener('change', updateRatings);
+    // Initial ausführen, falls bereits vorausgewählt (bei Bearbeitung)
+    updateRatings();
+});
+</script>
+{% endblock %}
