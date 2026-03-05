@@ -1,7 +1,7 @@
 # app/admin.py
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app, session
 from flask_login import login_required, current_user
-from sqlalchemy import desc, or_
+from sqlalchemy import desc, or_, false
 from app import db
 from app.models import User, Team, TeamMember, Coaching, Workshop, workshop_participants, Project
 from app.forms import RegistrationForm, TeamForm, TeamMemberForm, CoachingForm, WorkshopForm, ProjectForm
@@ -34,44 +34,62 @@ def panel():
     
     archiv_search = request.args.get('archiv_search', default='', type=str).strip()
 
-    # --- Benutzer Query mit Filtern ---
+    # --- Flags, ob Filter aktiv sind ---
+    user_filter_active = any([user_project_filter, user_role_filter, user_search])
+    team_filter_active = any([team_project_filter, team_search])
+    member_filter_active = any([member_project_filter, member_team_filter, member_search])
+    archiv_filter_active = any([archiv_search])
+
+    # --- Benutzer Query ---
     users_query = User.query
-    if user_project_filter:
-        users_query = users_query.filter(User.project_id == user_project_filter)
-    if user_role_filter:
-        users_query = users_query.filter(User.role == user_role_filter)
-    if user_search:
-        users_query = users_query.filter(
-            or_(
-                User.username.ilike(f'%{user_search}%'),
-                User.email.ilike(f'%{user_search}%')
+    if not user_filter_active:
+        users_query = users_query.filter(false())  # keine Ergebnisse
+    else:
+        if user_project_filter:
+            users_query = users_query.filter(User.project_id == user_project_filter)
+        if user_role_filter:
+            users_query = users_query.filter(User.role == user_role_filter)
+        if user_search:
+            users_query = users_query.filter(
+                or_(
+                    User.username.ilike(f'%{user_search}%'),
+                    User.email.ilike(f'%{user_search}%')
+                )
             )
-        )
     users_paginated = users_query.order_by(User.username).paginate(page=page_users, per_page=20, error_out=False)
 
-    # --- Teams Query mit Filtern ---
+    # --- Teams Query ---
     teams_query = Team.query.filter(Team.name != ARCHIV_TEAM_NAME)
-    if team_project_filter:
-        teams_query = teams_query.filter(Team.project_id == team_project_filter)
-    if team_search:
-        teams_query = teams_query.filter(Team.name.ilike(f'%{team_search}%'))
+    if not team_filter_active:
+        teams_query = teams_query.filter(false())
+    else:
+        if team_project_filter:
+            teams_query = teams_query.filter(Team.project_id == team_project_filter)
+        if team_search:
+            teams_query = teams_query.filter(Team.name.ilike(f'%{team_search}%'))
     teams_paginated = teams_query.order_by(Team.name).paginate(page=page_teams, per_page=20, error_out=False)
 
-    # --- Aktive Teammitglieder Query mit Filtern ---
+    # --- Aktive Teammitglieder Query ---
     members_query = TeamMember.query.join(Team).filter(Team.name != ARCHIV_TEAM_NAME)
-    if member_project_filter:
-        members_query = members_query.filter(Team.project_id == member_project_filter)
-    if member_team_filter:
-        members_query = members_query.filter(TeamMember.team_id == member_team_filter)
-    if member_search:
-        members_query = members_query.filter(TeamMember.name.ilike(f'%{member_search}%'))
+    if not member_filter_active:
+        members_query = members_query.filter(false())
+    else:
+        if member_project_filter:
+            members_query = members_query.filter(Team.project_id == member_project_filter)
+        if member_team_filter:
+            members_query = members_query.filter(TeamMember.team_id == member_team_filter)
+        if member_search:
+            members_query = members_query.filter(TeamMember.name.ilike(f'%{member_search}%'))
     members_paginated = members_query.order_by(TeamMember.name).paginate(page=page_members, per_page=20, error_out=False)
 
-    # --- Archivierte Mitglieder Query mit Filtern ---
+    # --- Archivierte Mitglieder Query ---
     archiv_team = get_or_create_archiv_team()
     archiv_query = TeamMember.query.filter_by(team_id=archiv_team.id)
-    if archiv_search:
-        archiv_query = archiv_query.filter(TeamMember.name.ilike(f'%{archiv_search}%'))
+    if not archiv_filter_active:
+        archiv_query = archiv_query.filter(false())
+    else:
+        if archiv_search:
+            archiv_query = archiv_query.filter(TeamMember.name.ilike(f'%{archiv_search}%'))
     archiv_paginated = archiv_query.order_by(TeamMember.name).paginate(page=page_archiv, per_page=20, error_out=False)
 
     # Listen für Filter-Dropdowns
@@ -98,6 +116,10 @@ def panel():
                                'member_search': member_search,
                                'archiv_search': archiv_search
                            },
+                           user_filter_active=user_filter_active,
+                           team_filter_active=team_filter_active,
+                           member_filter_active=member_filter_active,
+                           archiv_filter_active=archiv_filter_active,
                            config=current_app.config)
 
 # --- Projekt Management ---
