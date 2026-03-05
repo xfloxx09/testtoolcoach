@@ -15,14 +15,89 @@ bp = Blueprint('admin', __name__)
 @login_required
 @role_required([ROLE_ADMIN, ROLE_BETRIEBSLEITER])
 def panel():
-    users = User.query.order_by(User.username).all()
-    teams = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
-    team_members = TeamMember.query.order_by(TeamMember.name).all()
-    archiv_team = Team.query.filter_by(name=ARCHIV_TEAM_NAME).first()
-    archived_members = archiv_team.members.all() if archiv_team else []
+    page_users = request.args.get('page_users', 1, type=int)
+    page_teams = request.args.get('page_teams', 1, type=int)
+    page_members = request.args.get('page_members', 1, type=int)
+    page_archiv = request.args.get('page_archiv', 1, type=int)
+    
+    # Filter-Parameter
+    user_project_filter = request.args.get('user_project', type=int)
+    user_role_filter = request.args.get('user_role', default='', type=str)
+    user_search = request.args.get('user_search', default='', type=str).strip()
+    
+    team_project_filter = request.args.get('team_project', type=int)
+    team_search = request.args.get('team_search', default='', type=str).strip()
+    
+    member_project_filter = request.args.get('member_project', type=int)
+    member_team_filter = request.args.get('member_team', type=int)
+    member_search = request.args.get('member_search', default='', type=str).strip()
+    
+    archiv_search = request.args.get('archiv_search', default='', type=str).strip()
+
+    # --- Benutzer Query mit Filtern ---
+    users_query = User.query
+    if user_project_filter:
+        users_query = users_query.filter(User.project_id == user_project_filter)
+    if user_role_filter:
+        users_query = users_query.filter(User.role == user_role_filter)
+    if user_search:
+        users_query = users_query.filter(
+            or_(
+                User.username.ilike(f'%{user_search}%'),
+                User.email.ilike(f'%{user_search}%')
+            )
+        )
+    users_paginated = users_query.order_by(User.username).paginate(page=page_users, per_page=20, error_out=False)
+
+    # --- Teams Query mit Filtern ---
+    teams_query = Team.query.filter(Team.name != ARCHIV_TEAM_NAME)
+    if team_project_filter:
+        teams_query = teams_query.filter(Team.project_id == team_project_filter)
+    if team_search:
+        teams_query = teams_query.filter(Team.name.ilike(f'%{team_search}%'))
+    teams_paginated = teams_query.order_by(Team.name).paginate(page=page_teams, per_page=20, error_out=False)
+
+    # --- Aktive Teammitglieder Query mit Filtern ---
+    members_query = TeamMember.query.join(Team).filter(Team.name != ARCHIV_TEAM_NAME)
+    if member_project_filter:
+        members_query = members_query.filter(Team.project_id == member_project_filter)
+    if member_team_filter:
+        members_query = members_query.filter(TeamMember.team_id == member_team_filter)
+    if member_search:
+        members_query = members_query.filter(TeamMember.name.ilike(f'%{member_search}%'))
+    members_paginated = members_query.order_by(TeamMember.name).paginate(page=page_members, per_page=20, error_out=False)
+
+    # --- Archivierte Mitglieder Query mit Filtern ---
+    archiv_team = get_or_create_archiv_team()
+    archiv_query = TeamMember.query.filter_by(team_id=archiv_team.id)
+    if archiv_search:
+        archiv_query = archiv_query.filter(TeamMember.name.ilike(f'%{archiv_search}%'))
+    archiv_paginated = archiv_query.order_by(TeamMember.name).paginate(page=page_archiv, per_page=20, error_out=False)
+
+    # Listen für Filter-Dropdowns
+    all_projects = Project.query.order_by(Project.name).all()
+    all_teams = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
+    all_roles = [role for role, _ in RegistrationForm.role.kwargs['choices']]  # Rollen aus dem Formular
+
     return render_template('admin/admin_panel.html', title='Admin Panel',
-                           users=users, teams=teams, team_members=team_members,
-                           archived_members=archived_members,
+                           users_paginated=users_paginated,
+                           teams_paginated=teams_paginated,
+                           members_paginated=members_paginated,
+                           archiv_paginated=archiv_paginated,
+                           all_projects=all_projects,
+                           all_teams=all_teams,
+                           all_roles=all_roles,
+                           filter_params={
+                               'user_project': user_project_filter,
+                               'user_role': user_role_filter,
+                               'user_search': user_search,
+                               'team_project': team_project_filter,
+                               'team_search': team_search,
+                               'member_project': member_project_filter,
+                               'member_team': member_team_filter,
+                               'member_search': member_search,
+                               'archiv_search': archiv_search
+                           },
                            config=current_app.config)
 
 # --- Projekt Management ---
@@ -285,7 +360,6 @@ def delete_team(team_id):
 def create_team_member():
     form = TeamMemberForm()
     projects = Project.query.order_by(Project.name).all()
-    # Alle Teams mit Projekt-IDs für die Filterung
     all_teams = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
     if form.validate_on_submit():
         try:
