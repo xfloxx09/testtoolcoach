@@ -6,6 +6,7 @@
     <title>{{ title }} - GK MoFu - Coaching</title>
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
     {% block head_extra %}{% endblock %}
 </head>
 <body>
@@ -20,6 +21,7 @@
                     <li class="nav-item"><a class="nav-link" href="{{ url_for('main.index') }}">Dashboard</a></li>
                     {% if current_user.role in ['Teamleiter', 'Qualitätsmanager', 'SalesCoach', 'Trainer', 'Admin'] %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('main.add_coaching') }}">Coaching hinzufügen</a></li>
+                        <li class="nav-item"><a class="nav-link" href="{{ url_for('main.add_workshop') }}">Workshop hinzufügen</a></li>
                     {% endif %}
                     {% if current_user.role == 'Teamleiter' and current_user.teams_led.count() > 0 %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('main.team_view') }}">Mein Team</a></li>
@@ -27,6 +29,7 @@
                     {% if current_user.role in ['Projektleiter', 'Qualitätsmanager', 'Abteilungsleiter'] %} 
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('main.pl_qm_dashboard') }}">Teams</a></li> 
                     {% endif %}
+                    <li class="nav-item"><a class="nav-link" href="{{ url_for('main.workshop_dashboard') }}">Workshops</a></li>
                     {% if current_user.role == 'Admin' %}
                         <li class="nav-item dropdown">
                             <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
