@@ -1,5 +1,5 @@
 # app/models.py
-print("<<<< START models.py (MULTIPLE TEAMLEADER + WORKSHOPS) GELADEN >>>>")
+print("<<<< START models.py (MULTI-PROJEKT) GELADEN >>>>")
 
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -16,8 +16,24 @@ team_leaders = db.Table('team_leaders',
 workshop_participants = db.Table('workshop_participants',
     db.Column('workshop_id', db.Integer, db.ForeignKey('workshops.id', ondelete='CASCADE'), primary_key=True),
     db.Column('team_member_id', db.Integer, db.ForeignKey('team_members.id', ondelete='CASCADE'), primary_key=True),
-    db.Column('individual_rating', db.Integer, nullable=True)  # 0-10 pro Teilnehmer
+    db.Column('individual_rating', db.Integer, nullable=True)
 )
+
+class Project(db.Model):
+    __tablename__ = 'projects'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    # Beziehungen
+    users = db.relationship('User', backref='project_ref', lazy='dynamic')
+    teams = db.relationship('Team', backref='project_ref', lazy='dynamic')
+    workshops = db.relationship('Workshop', backref='project_ref', lazy='dynamic')
+    coachings = db.relationship('Coaching', backref='project_ref', lazy='dynamic')
+
+    def __repr__(self):
+        return f'<Project {self.name}>'
 
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
@@ -29,10 +45,13 @@ class User(UserMixin, db.Model):
     # Alte Spalte – wird nicht mehr aktiv genutzt, bleibt aber für Kompatibilität
     team_id_if_leader = db.Column(db.Integer, db.ForeignKey('teams.id', name='fk_user_team_id_if_leader'), nullable=True)
 
+    # NEU: Projekt-Zuordnung (jeder User gehört genau zu einem Projekt)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+
     coachings_done = db.relationship('Coaching', foreign_keys='Coaching.coach_id', backref='coach', lazy='dynamic')
-    # NEU: Beziehung zu den Teams, die dieser User leitet
+    # Beziehung zu den Teams, die dieser User leitet
     teams_led = db.relationship('Team', secondary=team_leaders, back_populates='leaders', lazy='dynamic')
-    # NEU: Workshops, die dieser User gegeben hat
+    # Workshops, die dieser User gegeben hat
     workshops_given = db.relationship('Workshop', backref='coach', lazy='dynamic')
 
     def set_password(self, password):
@@ -60,8 +79,11 @@ class Team(db.Model):
         backref=db.backref('led_team_obj', uselist=False, lazy='joined')
     )
 
+    # NEU: Projekt-Zuordnung
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+
     members = db.relationship('TeamMember', backref='team', lazy='dynamic')
-    # NEU: Beziehung zu den Teamleitern dieses Teams
+    # Beziehung zu den Teamleitern dieses Teams
     leaders = db.relationship('User', secondary=team_leaders, back_populates='teams_led', lazy='dynamic')
 
     def __repr__(self):
@@ -73,7 +95,7 @@ class TeamMember(db.Model):
     name = db.Column(db.String(100), nullable=False)
     team_id = db.Column(db.Integer, db.ForeignKey('teams.id', name='fk_teammember_team_id'), nullable=False)
     coachings_received = db.relationship('Coaching', backref='team_member_coached', lazy='dynamic')
-    # NEU: Workshops, an denen dieses Mitglied teilgenommen hat (mit Bewertungen)
+    # Workshops, an denen dieses Mitglied teilgenommen hat (mit Bewertungen)
     workshops_attended = db.relationship('Workshop', secondary=workshop_participants,
                                          backref=db.backref('participants', lazy='dynamic'),
                                          lazy='dynamic')
@@ -103,6 +125,9 @@ class Coaching(db.Model):
     performance_mark = db.Column(db.Integer, nullable=True)
     time_spent = db.Column(db.Integer, nullable=True)
     project_leader_notes = db.Column(db.Text, nullable=True)
+
+    # NEU: Projekt-Zuordnung (denormalisiert für einfache Abfragen)
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
 
     @property
     def leitfaden_fields_list(self):
@@ -171,10 +196,13 @@ class Workshop(db.Model):
     time_spent = db.Column(db.Integer, nullable=True)
     notes = db.Column(db.Text, nullable=True)
 
+    # NEU: Projekt-Zuordnung
+    project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+
     # Beziehungen (coach ist bereits durch backref definiert)
     # participants wird über die secondary-Tabelle verwaltet
 
     def __repr__(self):
         return f'<Workshop {self.id}: {self.title}>'
 
-print("<<<< ENDE models.py (MULTIPLE TEAMLEADER + WORKSHOPS) GELADEN >>>>")
+print("<<<< ENDE models.py (MULTI-PROJEKT) GELADEN >>>>")
