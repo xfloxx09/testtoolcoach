@@ -284,11 +284,11 @@ def delete_team(team_id):
 @role_required([ROLE_ADMIN, ROLE_BETRIEBSLEITER])
 def create_team_member():
     form = TeamMemberForm()
-    # Alle Projekte für die Dropdown-Liste
     projects = Project.query.order_by(Project.name).all()
+    # Alle Teams mit Projekt-IDs für die Filterung
+    all_teams = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
     if form.validate_on_submit():
         try:
-            # Prüfen, ob das Team existiert (optional)
             team = Team.query.get(form.team_id.data)
             if not team:
                 flash('Team nicht gefunden.', 'danger')
@@ -302,7 +302,8 @@ def create_team_member():
             db.session.rollback()
             current_app.logger.error(f"Fehler beim Erstellen des Teammitglieds: {e}")
             flash(f'Fehler beim Erstellen des Teammitglieds: {str(e)}', 'danger')
-    return render_template('admin/create_team_member.html', title='Teammitglied erstellen', form=form, projects=projects, config=current_app.config)
+    return render_template('admin/create_team_member.html', title='Teammitglied erstellen',
+                           form=form, projects=projects, all_teams=all_teams, config=current_app.config)
 
 @bp.route('/teammembers/edit/<int:member_id>', methods=['GET', 'POST'])
 @login_required
@@ -311,6 +312,7 @@ def edit_team_member(member_id):
     member = TeamMember.query.get_or_404(member_id)
     form = TeamMemberForm(obj=member)
     projects = Project.query.order_by(Project.name).all()
+    all_teams = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
     if form.validate_on_submit():
         try:
             member.name = form.name.data
@@ -324,7 +326,8 @@ def edit_team_member(member_id):
             flash(f'Fehler beim Bearbeiten des Teammitglieds: {str(e)}', 'danger')
     elif request.method == 'GET':
         form.team_id.data = member.team_id
-    return render_template('admin/edit_team_member.html', title='Teammitglied bearbeiten', form=form, member=member, projects=projects, config=current_app.config)
+    return render_template('admin/edit_team_member.html', title='Teammitglied bearbeiten',
+                           form=form, member=member, projects=projects, all_teams=all_teams, config=current_app.config)
 
 @bp.route('/teammembers/<int:member_id>/move-to-archiv', methods=['POST'])
 @login_required
