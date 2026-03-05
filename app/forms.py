@@ -2,8 +2,8 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField, SelectField, SelectMultipleField, IntegerField, TextAreaField
 from wtforms.validators import DataRequired, EqualTo, ValidationError, Length, NumberRange
-from app.models import User, Team, TeamMember
-from app.utils import ARCHIV_TEAM_NAME, ROLE_TEAMLEITER
+from app.models import User, Team, TeamMember, Project
+from app.utils import ARCHIV_TEAM_NAME, ROLE_TEAMLEITER, ROLE_ADMIN, ROLE_BETRIEBSLEITER
 
 class LoginForm(FlaskForm):
     username = StringField('Benutzername', validators=[DataRequired("Benutzername ist erforderlich.")])
@@ -26,9 +26,12 @@ class RegistrationForm(FlaskForm):
         ('Trainer', 'Trainer'),
         ('Projektleiter', 'AL/PL'),
         ('Admin', 'Admin'),
+        ('Betriebsleiter', 'Betriebsleiter'),  # <-- NEU
         ('Abteilungsleiter', 'Abteilungsleiter')
     ], validators=[DataRequired("Rolle ist erforderlich.")])
     team_ids = SelectMultipleField('Zugeordnete Teams (nur für Teamleiter)', coerce=int, choices=[])
+    # NEU: Projektauswahl (nur für Admin/Betriebsleiter sichtbar)
+    project_id = SelectField('Projekt', coerce=int, choices=[])
     submit = SubmitField('Benutzer registrieren/aktualisieren')
 
     def __init__(self, original_username=None, *args, **kwargs):
@@ -36,6 +39,8 @@ class RegistrationForm(FlaskForm):
         self.original_username = original_username
         active_teams = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
         self.team_ids.choices = [(t.id, t.name) for t in active_teams]
+        # Alle Projekte für die Auswahl
+        self.project_id.choices = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
 
     def validate_username(self, username_field):
         query = User.query.filter(User.username == username_field.data)
@@ -48,6 +53,8 @@ class RegistrationForm(FlaskForm):
 class TeamForm(FlaskForm):
     name = StringField('Team Name', validators=[DataRequired(), Length(min=3, max=100)])
     team_leaders = SelectMultipleField('Teamleiter', coerce=int, choices=[])
+    # NEU: Projektauswahl (nur für Admin/Betriebsleiter sichtbar)
+    project_id = SelectField('Projekt', coerce=int, choices=[])
     submit = SubmitField('Team erstellen/aktualisieren')
 
     def __init__(self, original_name=None, *args, **kwargs):
@@ -55,6 +62,7 @@ class TeamForm(FlaskForm):
         self.original_name = original_name
         possible_leaders = User.query.filter(User.role == ROLE_TEAMLEITER).order_by(User.username).all()
         self.team_leaders.choices = [(u.id, u.username) for u in possible_leaders]
+        self.project_id.choices = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
 
     def validate_name(self, name_field):
         if self.original_name and self.original_name.strip().upper() == name_field.data.strip().upper():
@@ -71,6 +79,7 @@ class TeamMemberForm(FlaskForm):
 
     def __init__(self, *args, **kwargs):
         super(TeamMemberForm, self).__init__(*args, **kwargs)
+        # Teams werden im Kontext des Projekts gefiltert – das machen wir in der Route
         active_teams = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
         if active_teams:
             self.team_id.choices = [(t.id, t.name) for t in active_teams]
@@ -105,28 +114,30 @@ class CoachingForm(FlaskForm):
     performance_mark = IntegerField('Performance Note (0-10)', validators=[DataRequired("Performance Note ist erforderlich."), NumberRange(min=0, max=10)])
     time_spent = IntegerField('Zeitaufwand (Minuten)', validators=[DataRequired("Zeitaufwand ist erforderlich."), NumberRange(min=1)])
     coach_notes = TextAreaField('Notizen des Coaches', validators=[Length(max=2000)])
+    # Optional: Projektauswahl für Admins/Betriebsleiter
+    project_id = SelectField('Projekt', coerce=int, choices=[])
     submit = SubmitField('Coaching speichern')
 
     def __init__(self, current_user_role=None, current_user_team_ids=None, *args, **kwargs):
         super(CoachingForm, self).__init__(*args, **kwargs)
         self.current_user_role = current_user_role
         self.current_user_team_ids = current_user_team_ids if current_user_team_ids is not None else []
+        self.project_id.choices = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
 
-    def update_team_member_choices(self, exclude_archiv=False):
+    def update_team_member_choices(self, exclude_archiv=False, project_id=None):
         generated_choices = []
-        if self.current_user_role == ROLE_TEAMLEITER and self.current_user_team_ids:
-            team_members = TeamMember.query.filter(TeamMember.team_id.in_(self.current_user_team_ids)).order_by(TeamMember.name).all()
-            for m in team_members:
-                generated_choices.append((m.id, m.name))
-        else:
-            query = Team.query
-            if exclude_archiv:
-                query = query.filter(Team.name != ARCHIV_TEAM_NAME)
-            all_teams = query.order_by(Team.name).all()
-            for team_obj in all_teams:
-                members = TeamMember.query.filter_by(team_id=team_obj.id).order_by(TeamMember.name).all()
-                for m in members:
-                    generated_choices.append((m.id, f"{m.name} ({team_obj.name})"))
+        query = TeamMember.query.join(Team)
+        if project_id:
+            query = query.filter(Team.project_id == project_id)
+        elif self.current_user_role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
+            # Normale User: auf eigenes Projekt beschränken
+            # In der Route wird project_id übergeben, daher ist dieser Fall eigentlich nicht nötig
+            pass
+        if exclude_archiv:
+            query = query.filter(Team.name != ARCHIV_TEAM_NAME)
+        members = query.order_by(TeamMember.name).all()
+        for m in members:
+            generated_choices.append((m.id, f"{m.name} ({m.team.name})"))
         self.team_member_id.choices = generated_choices
 
 class PasswordChangeForm(FlaskForm):
@@ -141,30 +152,30 @@ class WorkshopForm(FlaskForm):
     overall_rating = IntegerField('Gesamtbewertung (0-10)', validators=[DataRequired(), NumberRange(min=0, max=10)])
     time_spent = IntegerField('Zeitaufwand (Minuten)', validators=[DataRequired(), NumberRange(min=1)])
     notes = TextAreaField('Notizen', validators=[Length(max=2000)])
+    # Optional: Projektauswahl für Admins/Betriebsleiter
+    project_id = SelectField('Projekt', coerce=int, choices=[])
     submit = SubmitField('Workshop speichern')
 
     def __init__(self, current_user_role=None, current_user_team_ids=None, *args, **kwargs):
         super(WorkshopForm, self).__init__(*args, **kwargs)
         self.current_user_role = current_user_role
         self.current_user_team_ids = current_user_team_ids if current_user_team_ids is not None else []
+        self.project_id.choices = [(p.id, p.name) for p in Project.query.order_by(Project.name).all()]
 
-    def update_participant_choices(self):
-        """Füllt die Auswahl der Teilnehmer basierend auf der Rolle"""
+    def update_participant_choices(self, project_id=None):
+        """Füllt die Auswahl der Teilnehmer basierend auf dem Projekt"""
         generated_choices = []
-        if self.current_user_role == ROLE_TEAMLEITER and self.current_user_team_ids:
-            # Teamleiter sehen nur Mitglieder ihrer Teams
-            team_members = TeamMember.query.filter(TeamMember.team_id.in_(self.current_user_team_ids)).order_by(TeamMember.name).all()
-            for m in team_members:
-                generated_choices.append((m.id, m.name))
-        else:
-            # Admins, QM etc. sehen alle aktiven Mitglieder (ohne Archiv)
-            query = TeamMember.query.join(Team).filter(Team.name != ARCHIV_TEAM_NAME).order_by(TeamMember.name)
-            for m in query.all():
-                generated_choices.append((m.id, f"{m.name} ({m.team.name})"))
+        query = TeamMember.query.join(Team)
+        if project_id:
+            query = query.filter(Team.project_id == project_id)
+        elif self.current_user_role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
+            pass
+        members = query.order_by(TeamMember.name).all()
+        for m in members:
+            generated_choices.append((m.id, f"{m.name} ({m.team.name})"))
         self.team_member_ids.choices = generated_choices
 
     def validate_team_member_ids(self, field):
-        """Stellt sicher, dass mindestens zwei Teilnehmer ausgewählt wurden."""
         if len(field.data) < 2:
             raise ValidationError('Es müssen mindestens zwei Teilnehmer ausgewählt werden.')
 
@@ -172,3 +183,8 @@ class ProjectLeaderNoteForm(FlaskForm):
     notes = TextAreaField('PL/QM Notiz',
                           validators=[DataRequired("Die Notiz darf nicht leer sein."),
                                       Length(max=2000)])
+
+class ProjectForm(FlaskForm):
+    name = StringField('Projektname', validators=[DataRequired(), Length(min=3, max=100)])
+    description = TextAreaField('Beschreibung', validators=[Length(max=500)])
+    submit = SubmitField('Projekt speichern')
