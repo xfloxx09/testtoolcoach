@@ -31,7 +31,7 @@
         <div class="form-group">
             {{ form.team_member_ids.label(class="form-control-label") }}
             {{ form.team_member_ids(class="form-control custom-select " + ("is-invalid" if form.team_member_ids.errors else ""), multiple=True, size=8, id="participant-select") }}
-            <small class="form-text text-muted">Halte Strg (Cmd) gedrückt, um mehrere Teilnehmer auszuwählen.</small>
+            <small class="form-text text-muted">Halte Strg (Ctrl) gedrückt, um mehrere Teilnehmer auszuwählen.</small>
             {% if form.team_member_ids.errors %}
                 <div class="invalid-feedback">
                     {% for error in form.team_member_ids.errors %}<span>{{ error }}</span>{% endfor %}
