@@ -60,17 +60,27 @@
                             </div>
                         {% endif %}
                     </div>
+
+                    <div class="form-group">
+                        {{ form.project_id.label(class="form-control-label") }}
+                        {{ form.project_id(class="form-control custom-select " + ("is-invalid" if form.project_id.errors else "")) }}
+                        {% if form.project_id.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.project_id.errors %}<span>{{ error }}</span>{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
                     
-                    <div class="form-group" id="team_select_div_user_edit"> {# ID bleibt gleich für JS #}
-    {{ form.team_ids.label(class="form-control-label") }}
-    {{ form.team_ids(class="form-control custom-select " + ("is-invalid" if form.team_ids.errors else ""), multiple=True, size=5) }}
-    <small class="form-text text-muted">Nur relevant, wenn Rolle 'Teamleiter' ist. Halte Strg (Cmd) für Mehrfachauswahl.</small>
-    {% if form.team_ids.errors %}
-        <div class="invalid-feedback">
-            {% for error in form.team_ids.errors %}<span>{{ error }}</span>{% endfor %}
-        </div>
-    {% endif %}
-</div>
+                    <div class="form-group" id="team_select_div_user">
+                        {{ form.team_ids.label(class="form-control-label") }}
+                        {{ form.team_ids(class="form-control custom-select " + ("is-invalid" if form.team_ids.errors else ""), multiple=True, size=5) }}
+                        <small class="form-text text-muted">Nur relevant, wenn Rolle 'Teamleiter' ist.</small>
+                        {% if form.team_ids.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.team_ids.errors %}<span>{{ error }}</span>{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
 
                     <div class="form-group">
                         {{ form.submit(class="btn telekom-button") }}
@@ -85,7 +95,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var roleSelect = document.getElementById('role');
-    var teamDiv = document.getElementById('team_select_div_user_edit'); // oder create_user entsprechend
+    var teamDiv = document.getElementById('team_select_div_user');
     function toggleTeamSelect() {
         if (roleSelect.value === 'Teamleiter') {
             teamDiv.style.display = 'block';
@@ -95,7 +105,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     if (roleSelect && teamDiv) {
         roleSelect.addEventListener('change', toggleTeamSelect);
-        toggleTeamSelect(); // Initialzustand
+        toggleTeamSelect();
     }
 });
 </script>
