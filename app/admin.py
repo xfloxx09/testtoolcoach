@@ -45,7 +45,7 @@ def panel():
     # --- Benutzer Query ---
     users_query = User.query
     if not user_filter_active:
-        users_query = users_query.filter(false())  # keine Ergebnisse
+        users_query = users_query.filter(false())
     else:
         if user_project_filter:
             users_query = users_query.filter(User.project_id == user_project_filter)
@@ -72,7 +72,6 @@ def panel():
     teams_paginated = teams_query.order_by(Team.name).paginate(page=page_teams, per_page=20, error_out=False)
 
     # --- Aktive Teammitglieder Query ---
-    # EXPLIZITER JOIN WEGEN MEHRDEUTIGKEIT (TeamMember hat zwei Fremdschlüssel auf teams)
     members_query = TeamMember.query.join(Team, TeamMember.team_id == Team.id).filter(Team.name != ARCHIV_TEAM_NAME)
     if not member_filter_active:
         members_query = members_query.filter(false())
@@ -460,6 +459,33 @@ def move_to_archiv(member_id):
         flash('Fehler beim Verschieben des Mitglieds ins Archiv.', 'danger')
     return redirect(url_for('admin.edit_team', team_id=original_team_id))
 
+# --- NEU: Endgültiges Löschen eines Teammitglieds ---
+@bp.route('/teammembers/delete-permanent/<int:member_id>', methods=['POST'])
+@login_required
+@role_required([ROLE_ADMIN, ROLE_BETRIEBSLEITER])
+def delete_team_member_permanently(member_id):
+    member = TeamMember.query.get_or_404(member_id)
+    member_name = member.name
+    
+    try:
+        # 1. Lösche alle Coachings dieses Mitglieds
+        Coaching.query.filter_by(team_member_id=member_id).delete()
+        
+        # 2. Lösche alle Workshop-Teilnahmen dieses Mitglieds
+        db.session.execute(workshop_participants.delete().where(workshop_participants.c.team_member_id == member_id))
+        
+        # 3. Lösche das Mitglied selbst
+        db.session.delete(member)
+        
+        db.session.commit()
+        flash(f'Mitglied "{member_name}" wurde endgültig gelöscht.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"Fehler beim endgültigen Löschen von Mitglied {member_id}: {e}")
+        flash(f'Fehler beim Löschen: {str(e)}', 'danger')
+    
+    return redirect(url_for('admin.panel'))
+
 # --- Coaching Management (Admin) ---
 @bp.route('/manage_coachings', methods=['GET', 'POST'])
 @login_required
@@ -729,11 +755,15 @@ def edit_workshop_entry(workshop_id):
             for member_id in form.team_member_ids.data:
                 individual_rating_key = f'individual_rating_{member_id}'
                 individual_rating = request.form.get(individual_rating_key, type=int)
+                member = TeamMember.query.get(member_id)
+                original_team_id = member.team_id if member else None
+
                 if individual_rating is not None and 0 <= individual_rating <= 10:
                     stmt = workshop_participants.insert().values(
                         workshop_id=workshop_to_edit.id,
                         team_member_id=member_id,
-                        individual_rating=individual_rating
+                        individual_rating=individual_rating,
+                        original_team_id=original_team_id
                     )
                     db.session.execute(stmt)
                 else:
