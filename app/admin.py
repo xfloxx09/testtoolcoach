@@ -32,13 +32,15 @@ def panel():
     member_team_filter = request.args.get('member_team', type=int)
     member_search = request.args.get('member_search', default='', type=str).strip()
     
+    archiv_project_filter = request.args.get('archiv_project', type=int)
+    archiv_team_filter = request.args.get('archiv_team', type=int)
     archiv_search = request.args.get('archiv_search', default='', type=str).strip()
 
     # --- Flags, ob Filter aktiv sind ---
     user_filter_active = any([user_project_filter, user_role_filter, user_search])
     team_filter_active = any([team_project_filter, team_search])
     member_filter_active = any([member_project_filter, member_team_filter, member_search])
-    archiv_filter_active = any([archiv_search])
+    archiv_filter_active = any([archiv_project_filter, archiv_team_filter, archiv_search])
 
     # --- Benutzer Query ---
     users_query = User.query
@@ -88,6 +90,10 @@ def panel():
     if not archiv_filter_active:
         archiv_query = archiv_query.filter(false())
     else:
+        if archiv_project_filter:
+            archiv_query = archiv_query.filter(TeamMember.original_project_id == archiv_project_filter)
+        if archiv_team_filter:
+            archiv_query = archiv_query.filter(TeamMember.original_team_id == archiv_team_filter)
         if archiv_search:
             archiv_query = archiv_query.filter(TeamMember.name.ilike(f'%{archiv_search}%'))
     archiv_paginated = archiv_query.order_by(TeamMember.name).paginate(page=page_archiv, per_page=20, error_out=False)
@@ -95,7 +101,7 @@ def panel():
     # Listen für Filter-Dropdowns
     all_projects = Project.query.order_by(Project.name).all()
     all_teams = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
-    all_roles = [role for role, _ in RegistrationForm.role.kwargs['choices']]  # Rollen aus dem Formular
+    all_roles = [role for role, _ in RegistrationForm.role.kwargs['choices']]
 
     return render_template('admin/admin_panel.html', title='Admin Panel',
                            users_paginated=users_paginated,
@@ -114,6 +120,8 @@ def panel():
                                'member_project': member_project_filter,
                                'member_team': member_team_filter,
                                'member_search': member_search,
+                               'archiv_project': archiv_project_filter,
+                               'archiv_team': archiv_team_filter,
                                'archiv_search': archiv_search
                            },
                            user_filter_active=user_filter_active,
@@ -439,6 +447,9 @@ def move_to_archiv(member_id):
         flash(f'{member_to_move.name} ist bereits im Archiv.', 'info')
         return redirect(url_for('admin.panel'))
     try:
+        # Ursprüngliche Zugehörigkeit speichern
+        member_to_move.original_team_id = member_to_move.team_id
+        member_to_move.original_project_id = member_to_move.team.project_id
         member_to_move.team_id = archiv_team.id
         db.session.commit()
         flash(f'Mitglied "{member_to_move.name}" wurde von Team "{original_team_name}" ins ARCHIV verschoben.', 'success')
