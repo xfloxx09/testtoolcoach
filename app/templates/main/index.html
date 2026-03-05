@@ -3,6 +3,102 @@
 
 {% block head_extra %}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <style>
+        /* Verbesserte Detailansicht */
+        .detail-card {
+            background-color: #333;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 10px;
+        }
+        .detail-section {
+            margin-bottom: 20px;
+        }
+        .detail-section-title {
+            color: #e20074;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
+        }
+        .detail-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        .detail-item {
+            background-color: #2b2b2b;
+            padding: 8px 12px;
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .detail-item strong {
+            color: #aaa;
+            font-weight: normal;
+            margin-right: 10px;
+        }
+        .detail-item span {
+            color: #fff;
+            font-weight: 500;
+        }
+        .badge-leitfaden {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-right: 5px;
+        }
+        .badge-ja {
+            background-color: #28a745;
+            color: white;
+        }
+        .badge-nein {
+            background-color: #dc3545;
+            color: white;
+        }
+        .badge-ka {
+            background-color: #6c757d;
+            color: white;
+        }
+        .leitfaden-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .notes-box {
+            background-color: #2b2b2b;
+            border-left: 3px solid #e20074;
+            padding: 15px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-style: italic;
+            color: #ddd;
+            margin-top: 10px;
+        }
+        .btn-icon-circle {
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background-color: transparent;
+            border: 1px solid #aaa;
+            color: #aaa;
+            transition: all 0.2s;
+        }
+        .btn-icon-circle:hover {
+            background-color: #e20074;
+            border-color: #e20074;
+            color: white;
+        }
+    </style>
 {% endblock %}
 
 {% block content %}
@@ -16,6 +112,7 @@
     {% endif %}
 
     <form method="GET" action="{{ url_for('main.coaching_dashboard') }}" id="filterForm" class="mb-4">
+        <!-- Filter (unverändert) -->
         <div class="form-row align-items-end">
             <div class="col-md-auto">
                 <div class="form-group mr-2">
@@ -70,6 +167,7 @@
         </div>
     </form>
 
+    <!-- Statistik-Kacheln (unverändert) -->
     <div class="row mb-4">
         <div class="col-md-6 mb-3">
             <div class="card text-white telekom-bg-magenta info-box h-100">
@@ -92,6 +190,7 @@
     </div>
     <hr>
 
+    <!-- Charts (unverändert) -->
     <div class="row">
         <div class="col-md-6 mb-4">
             <div class="card h-100">
@@ -130,6 +229,7 @@
     </div>
     <hr class="mt-0">
 
+    <!-- Coaching-Liste -->
     <div class="row mt-3 mb-2 align-items-center">
         <div class="col-md-7 col-lg-8">
             <h3 class="mb-0">Coaching Liste (Angezeigt: {{ coachings_paginated.items|length if coachings_paginated and coachings_paginated.items else 0 }}, Gesamt gefiltert: {{ total_coachings if total_coachings is not none else 0 }})</h3>
@@ -197,12 +297,11 @@
                             {% endif %}
                         </td>
                         <td>
-                            <!-- Verbesserter Details-Button als Icon -->
-                            <button class="btn btn-sm btn-outline-light rounded-circle" type="button" 
+                            <button class="btn-icon-circle" type="button" 
                                     data-toggle="collapse" data-target="#coachingDetails{{ coaching.id }}" 
                                     aria-expanded="false" aria-controls="coachingDetails{{ coaching.id }}" 
                                     title="Details anzeigen">
-                                <i class="fas fa-info-circle"></i>
+                                <i class="fas fa-info"></i>
                             </button>
                         </td>
                         <td>
@@ -215,34 +314,52 @@
                         </td>
                     </tr>
                     <tr class="collapse" id="coachingDetails{{ coaching.id }}">
-                        <td colspan="12"> 
-                            <div class="card card-body">
-                                <strong>Stil:</strong> {{ coaching.coaching_style if coaching.coaching_style else '-'}} 
-                                {% if coaching.coaching_style == 'TCAP' and coaching.tcap_id %}
-                                    (T-CAP ID: {{ coaching.tcap_id }})
-                                {% endif %}<br>
-                                <strong>Betreff:</strong> {{ coaching.coaching_subject if coaching.coaching_subject else '-' }}<br>
-                                <strong>Performance Note (0-10):</strong> {{ coaching.performance_mark }}<br>
-                                <strong>Zeitaufwand:</strong> {{ coaching.time_spent }} Min.<br>
-                                <hr>
-                                <strong>Leitfaden-Checkmarks:</strong><br>
-                                <ul class="list-unstyled ml-3">
-                                {% for name, value in coaching.leitfaden_fields_list %}
-                                    <li>{{ name }}: <strong>{{ value }}</strong></li>
-                                {% endfor %}
-                                </ul>
-                                <strong>Leitfaden Erfüllung:</strong> {{ coaching.leitfaden_erfuellung_display }}
-                                
+                        <td colspan="12">
+                            <div class="detail-card">
+                                <!-- Basis-Informationen -->
+                                <div class="detail-section">
+                                    <div class="detail-section-title">Basis-Informationen</div>
+                                    <div class="detail-grid">
+                                        <div class="detail-item"><strong>Stil:</strong> <span>{{ coaching.coaching_style if coaching.coaching_style else '-'}}</span></div>
+                                        {% if coaching.coaching_style == 'TCAP' and coaching.tcap_id %}
+                                        <div class="detail-item"><strong>T-CAP ID:</strong> <span>{{ coaching.tcap_id }}</span></div>
+                                        {% endif %}
+                                        <div class="detail-item"><strong>Thema:</strong> <span>{{ coaching.coaching_subject if coaching.coaching_subject else '-' }}</span></div>
+                                        <div class="detail-item"><strong>Performance Note:</strong> <span>{{ coaching.performance_mark }}/10</span></div>
+                                        <div class="detail-item"><strong>Zeitaufwand:</strong> <span>{{ coaching.time_spent }} Min.</span></div>
+                                        <div class="detail-item"><strong>Leitfaden Erfüllung:</strong> <span>{{ coaching.leitfaden_erfuellung_display }}</span></div>
+                                    </div>
+                                </div>
+
+                                <!-- Leitfaden-Checkmarks als Badges -->
+                                <div class="detail-section">
+                                    <div class="detail-section-title">Leitfaden-Checkmarks</div>
+                                    <div class="leitfaden-list">
+                                        {% for name, value in coaching.leitfaden_fields_list %}
+                                            {% if value == 'Ja' %}
+                                                <span class="badge-leitfaden badge-ja">{{ name }}: ✓</span>
+                                            {% elif value == 'Nein' %}
+                                                <span class="badge-leitfaden badge-nein">{{ name }}: ✗</span>
+                                            {% else %}
+                                                <span class="badge-leitfaden badge-ka">{{ name }}: ?</span>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </div>
+                                </div>
+
+                                <!-- Notizen -->
                                 {% if coaching.coach_notes %}
-                                <hr>
-                                <strong>Notizen des Coaches:</strong><br>
-                                <p style="white-space: pre-wrap;">{{ coaching.coach_notes }}</p>
+                                <div class="detail-section">
+                                    <div class="detail-section-title">Notizen des Coaches</div>
+                                    <div class="notes-box">{{ coaching.coach_notes }}</div>
+                                </div>
                                 {% endif %}
 
                                 {% if coaching.project_leader_notes %}
-                                <hr>
-                                <strong>PL/QM Notiz:</strong><br>
-                                <p style="white-space: pre-wrap;">{{ coaching.project_leader_notes }}</p>
+                                <div class="detail-section">
+                                    <div class="detail-section-title">PL/QM Notiz</div>
+                                    <div class="notes-box">{{ coaching.project_leader_notes }}</div>
+                                </div>
                                 {% endif %}
                             </div>
                         </td>
@@ -252,6 +369,7 @@
             </table>
         </div> 
 
+        <!-- Pagination (unverändert) -->
         <nav aria-label="Coaching Navigation" class="mt-4">
             <ul class="pagination justify-content-center">
                 {% if coachings_paginated.has_prev %}
@@ -288,6 +406,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-annotation/1.4.0/chartjs-plugin-annotation.min.js"></script>
     <script>
-    // ... (Chart.js Code unverändert) ...
+    // Chart.js Code (unverändert, hier der Vollständigkeit halber weggelassen – bitte aus deiner aktuellen Datei übernehmen)
+    document.addEventListener('DOMContentLoaded', function () {
+        // ... dein vorhandener Chart-Code ...
+    });
     </script>
 {% endblock %}
