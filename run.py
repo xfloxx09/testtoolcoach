@@ -1,6 +1,6 @@
 from app import create_app, db
 from sqlalchemy import inspect, text
-from app.models import Project, User, Team, Workshop, Coaching
+from app.models import Project, User, Team, Workshop, Coaching, TeamMember
 
 app = create_app()
 
@@ -11,7 +11,7 @@ with app.app_context():
     # 1. Tabelle 'projects' anlegen, falls nicht vorhanden
     if 'projects' not in inspector.get_table_names():
         print("⚠️ Tabelle 'projects' fehlt – wird jetzt erstellt...")
-        db.create_all()  # erstellt alle fehlenden Tabellen (inkl. projects)
+        db.create_all()
         print("✅ Tabelle 'projects' erstellt.")
     else:
         print("✅ Tabelle 'projects' existiert bereits.")
@@ -48,7 +48,6 @@ with app.app_context():
         print("✅ Default-Projekt 'GK-Mobilfunk' existiert bereits.")
 
     # 4. Bestehende Datensätze mit dem Default-Projekt verknüpfen (falls NULL)
-    #    Wir setzen project_id = 1 für alle Zeilen, die noch NULL haben.
     for table in ['users', 'teams', 'workshops', 'coachings']:
         if column_exists(table, 'project_id'):
             result = conn.execute(text(f'UPDATE "{table}" SET project_id = 1 WHERE project_id IS NULL'))
@@ -56,14 +55,11 @@ with app.app_context():
                 print(f"ℹ️ {result.rowcount} Zeilen in '{table}' mit Projekt 1 verknüpft.")
             conn.commit()
 
-    # 5. Sicherstellen, dass 'project_id' jetzt NOT NULL ist (falls nicht bereits)
-    #    Wir ändern die Spalte auf NOT NULL, wenn noch NULL-Werte existieren (sollten keine mehr).
+    # 5. Sicherstellen, dass 'project_id' NOT NULL ist (falls nicht bereits)
     for table in ['users', 'teams', 'workshops', 'coachings']:
         if column_exists(table, 'project_id'):
-            # Prüfen, ob noch NULL vorkommen
             null_count = conn.execute(text(f'SELECT COUNT(*) FROM "{table}" WHERE project_id IS NULL')).scalar()
             if null_count == 0:
-                # Spalte auf NOT NULL setzen
                 try:
                     conn.execute(text(f'ALTER TABLE "{table}" ALTER COLUMN project_id SET NOT NULL'))
                     conn.commit()
@@ -73,7 +69,40 @@ with app.app_context():
             else:
                 print(f"⚠️ In '{table}' gibt es noch {null_count} NULL-Werte – bitte manuell prüfen.")
 
-    print("✅ Migration für Multi-Projekt abgeschlossen.")
+    # 6. Neue Spalten für Archiv-Filter in team_members
+    if 'original_team_id' not in [col['name'] for col in inspector.get_columns('team_members')]:
+        print("⚠️ Spalte 'original_team_id' in team_members fehlt – wird hinzugefügt...")
+        conn.execute(text('ALTER TABLE team_members ADD COLUMN original_team_id INTEGER REFERENCES teams(id)'))
+        conn.commit()
+        print("✅ Spalte 'original_team_id' hinzugefügt.")
+    else:
+        print("✅ Spalte 'original_team_id' existiert bereits.")
+
+    if 'original_project_id' not in [col['name'] for col in inspector.get_columns('team_members')]:
+        print("⚠️ Spalte 'original_project_id' in team_members fehlt – wird hinzugefügt...")
+        conn.execute(text('ALTER TABLE team_members ADD COLUMN original_project_id INTEGER REFERENCES projects(id)'))
+        conn.commit()
+        print("✅ Spalte 'original_project_id' hinzugefügt.")
+    else:
+        print("✅ Spalte 'original_project_id' existiert bereits.")
+
+    # 7. Prüfe, ob Tabelle 'team_leaders' existiert (für alte Migration)
+    if 'team_leaders' not in inspector.get_table_names():
+        print("⚠️ Tabelle 'team_leaders' fehlt – wird jetzt erstellt...")
+        db.create_all()
+        print("✅ Tabelle 'team_leaders' erstellt.")
+    else:
+        print("✅ Tabelle 'team_leaders' existiert bereits.")
+
+    # 8. Prüfe, ob Tabelle 'workshops' existiert
+    if 'workshops' not in inspector.get_table_names():
+        print("⚠️ Tabelle 'workshops' fehlt – wird jetzt erstellt...")
+        db.create_all()
+        print("✅ Tabelle 'workshops' erstellt.")
+    else:
+        print("✅ Tabelle 'workshops' existiert bereits.")
+
+    print("✅ Migration für Multi-Projekt und Archiv-Filter abgeschlossen.")
 
 if __name__ == "__main__":
     app.run()
