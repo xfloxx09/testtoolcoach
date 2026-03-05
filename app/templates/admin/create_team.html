@@ -33,6 +33,17 @@
                     </div>
 
                     <div class="form-group">
+                        {{ form.project_id.label(class="form-control-label") }}
+                        {{ form.project_id(class="form-control custom-select " + ("is-invalid" if form.project_id.errors else "")) }}
+                        <small class="form-text text-muted">Wähle das Projekt, zu dem dieses Team gehört.</small>
+                        {% if form.project_id.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.project_id.errors %}<span>{{ error }}</span>{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="form-group">
                         {{ form.submit(class="btn telekom-button") }}
                         <a href="{{ url_for('admin.panel') }}" class="btn btn-secondary">Abbrechen</a>
                     </div>
