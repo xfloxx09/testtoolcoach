@@ -100,6 +100,11 @@
                                         </li>
                                     {% endfor %}
                                 </ul>
+                                {% if workshop.notes %}
+                                <hr>
+                                <strong>Notizen:</strong>
+                                <p style="white-space: pre-wrap;">{{ workshop.notes }}</p>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
