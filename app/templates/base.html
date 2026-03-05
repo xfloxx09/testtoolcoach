@@ -21,23 +21,22 @@
                     {% if current_user.role in ['Teamleiter', 'Qualitätsmanager', 'SalesCoach', 'Trainer', 'Admin'] %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('main.add_coaching') }}">Coaching hinzufügen</a></li>
                     {% endif %}
-                    {% if current_user.role == 'Teamleiter' and current_user.team_id_if_leader %}
+                    {% if current_user.role == 'Teamleiter' and current_user.teams_led.count() > 0 %}
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('main.team_view') }}">Mein Team</a></li>
                     {% endif %}
                     {% if current_user.role in ['Projektleiter', 'Qualitätsmanager', 'Abteilungsleiter'] %} 
                         <li class="nav-item"><a class="nav-link" href="{{ url_for('main.pl_qm_dashboard') }}">Teams</a></li> 
                     {% endif %}
                     {% if current_user.role == 'Admin' %}
-                        <li class="nav-item dropdown"> {# Changed to dropdown for more admin options #}
-        <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            Admin
-        </a>
-        <div class="dropdown-menu" aria-labelledby="adminDropdown">
-            <a class="dropdown-item" href="{{ url_for('admin.panel') }}">Admin Panel</a>
-            <a class="dropdown-item" href="{{ url_for('admin.manage_coachings') }}">Coachings Verwalten</a>
-            {# Add other admin links here as needed #}
-        </div>
-    </li>
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                                Admin
+                            </a>
+                            <div class="dropdown-menu" aria-labelledby="adminDropdown">
+                                <a class="dropdown-item" href="{{ url_for('admin.panel') }}">Admin Panel</a>
+                                <a class="dropdown-item" href="{{ url_for('admin.manage_coachings') }}">Coachings Verwalten</a>
+                            </div>
+                        </li>
                     {% endif %}
                 {% endif %}
             </ul>
@@ -77,7 +76,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> 
-    {# Chart.js Plugins werden im 'scripts'-Block der jeweiligen Seite geladen, die sie benötigt #}
     {% block scripts %}{% endblock %}
 </body>
 </html>
