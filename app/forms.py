@@ -28,14 +28,12 @@ class RegistrationForm(FlaskForm):
         ('Admin', 'Admin'),
         ('Abteilungsleiter', 'Abteilungsleiter')
     ], validators=[DataRequired("Rolle ist erforderlich.")])
-    # NEU: Mehrfachauswahl für Teams (nur für Teamleiter relevant)
     team_ids = SelectMultipleField('Zugeordnete Teams (nur für Teamleiter)', coerce=int, choices=[])
     submit = SubmitField('Benutzer registrieren/aktualisieren')
 
     def __init__(self, original_username=None, *args, **kwargs):
         super(RegistrationForm, self).__init__(*args, **kwargs)
         self.original_username = original_username
-        # Auswahl der aktiven Teams (ohne ARCHIV)
         active_teams = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
         self.team_ids.choices = [(t.id, t.name) for t in active_teams]
 
@@ -49,14 +47,12 @@ class RegistrationForm(FlaskForm):
 
 class TeamForm(FlaskForm):
     name = StringField('Team Name', validators=[DataRequired(), Length(min=3, max=100)])
-    # NEU: Mehrfachauswahl für Teamleiter
     team_leaders = SelectMultipleField('Teamleiter', coerce=int, choices=[])
     submit = SubmitField('Team erstellen/aktualisieren')
 
     def __init__(self, original_name=None, *args, **kwargs):
         super(TeamForm, self).__init__(*args, **kwargs)
         self.original_name = original_name
-        # Nur Benutzer mit Rolle 'Teamleiter' anzeigen
         possible_leaders = User.query.filter(User.role == ROLE_TEAMLEITER).order_by(User.username).all()
         self.team_leaders.choices = [(u.id, u.username) for u in possible_leaders]
 
@@ -119,12 +115,10 @@ class CoachingForm(FlaskForm):
     def update_team_member_choices(self, exclude_archiv=False):
         generated_choices = []
         if self.current_user_role == ROLE_TEAMLEITER and self.current_user_team_ids:
-            # Teamleiter sehen nur Mitglieder ihrer eigenen Teams
             team_members = TeamMember.query.filter(TeamMember.team_id.in_(self.current_user_team_ids)).order_by(TeamMember.name).all()
             for m in team_members:
                 generated_choices.append((m.id, m.name))
         else:
-            # Admins, QM etc. sehen alle (außer Archiv, wenn gewünscht)
             query = Team.query
             if exclude_archiv:
                 query = query.filter(Team.name != ARCHIV_TEAM_NAME)
@@ -135,13 +129,13 @@ class CoachingForm(FlaskForm):
                     generated_choices.append((m.id, f"{m.name} ({team_obj.name})"))
         self.team_member_id.choices = generated_choices
 
-class ProjectLeaderNoteForm(FlaskForm):
-    notes = TextAreaField('PL/QM Notiz',
-                          validators=[DataRequired("Die Notiz darf nicht leer sein."),
-                                      Length(max=2000)])
-
 class PasswordChangeForm(FlaskForm):
     old_password = PasswordField('Aktuelles Passwort', validators=[DataRequired("Bitte aktuelles Passwort eingeben.")])
     new_password = PasswordField('Neues Passwort', validators=[DataRequired("Neues Passwort ist erforderlich."), Length(min=6)])
     confirm_password = PasswordField('Neues Passwort wiederholen', validators=[DataRequired("Bitte wiederholen."), EqualTo('new_password', message='Passwörter müssen übereinstimmen.')])
     submit = SubmitField('Passwort ändern')
+
+class ProjectLeaderNoteForm(FlaskForm):
+    notes = TextAreaField('PL/QM Notiz',
+                          validators=[DataRequired("Die Notiz darf nicht leer sein."),
+                                      Length(max=2000)])
