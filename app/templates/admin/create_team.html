@@ -22,12 +22,12 @@
                     </div>
 
                     <div class="form-group">
-                        {{ form.team_leader_id.label(class="form-control-label") }}
-                        {{ form.team_leader_id(class="form-control custom-select " + ("is-invalid" if form.team_leader_id.errors else "")) }}
-                        <small class="form-text text-muted">Optional. Wähle einen Benutzer mit der Rolle 'Teamleiter'.</small>
-                        {% if form.team_leader_id.errors %}
+                        {{ form.team_leaders.label(class="form-control-label") }}
+                        {{ form.team_leaders(class="form-control custom-select " + ("is-invalid" if form.team_leaders.errors else ""), multiple=True, size=5) }}
+                        <small class="form-text text-muted">Halte Strg (Cmd) gedrückt, um mehrere Teamleiter auszuwählen.</small>
+                        {% if form.team_leaders.errors %}
                             <div class="invalid-feedback">
-                                {% for error in form.team_leader_id.errors %}<span>{{ error }}</span>{% endfor %}
+                                {% for error in form.team_leaders.errors %}<span>{{ error }}</span>{% endfor %}
                             </div>
                         {% endif %}
                     </div>
