@@ -135,6 +135,34 @@ class PasswordChangeForm(FlaskForm):
     confirm_password = PasswordField('Neues Passwort wiederholen', validators=[DataRequired("Bitte wiederholen."), EqualTo('new_password', message='Passwörter müssen übereinstimmen.')])
     submit = SubmitField('Passwort ändern')
 
+class WorkshopForm(FlaskForm):
+    title = StringField('Workshop-Thema', validators=[DataRequired("Bitte ein Thema angeben."), Length(max=200)])
+    team_member_ids = SelectMultipleField('Teilnehmer', coerce=int, validators=[DataRequired("Mindestens ein Teilnehmer erforderlich.")], choices=[])
+    overall_rating = IntegerField('Gesamtbewertung (0-10)', validators=[DataRequired(), NumberRange(min=0, max=10)])
+    time_spent = IntegerField('Zeitaufwand (Minuten)', validators=[DataRequired(), NumberRange(min=1)])
+    notes = TextAreaField('Notizen', validators=[Length(max=2000)])
+    submit = SubmitField('Workshop speichern')
+
+    def __init__(self, current_user_role=None, current_user_team_ids=None, *args, **kwargs):
+        super(WorkshopForm, self).__init__(*args, **kwargs)
+        self.current_user_role = current_user_role
+        self.current_user_team_ids = current_user_team_ids if current_user_team_ids is not None else []
+
+    def update_participant_choices(self):
+        """Füllt die Auswahl der Teilnehmer basierend auf der Rolle"""
+        generated_choices = []
+        if self.current_user_role == ROLE_TEAMLEITER and self.current_user_team_ids:
+            # Teamleiter sehen nur Mitglieder ihrer Teams
+            team_members = TeamMember.query.filter(TeamMember.team_id.in_(self.current_user_team_ids)).order_by(TeamMember.name).all()
+            for m in team_members:
+                generated_choices.append((m.id, m.name))
+        else:
+            # Admins, QM etc. sehen alle aktiven Mitglieder (ohne Archiv)
+            query = TeamMember.query.join(Team).filter(Team.name != ARCHIV_TEAM_NAME).order_by(TeamMember.name)
+            for m in query.all():
+                generated_choices.append((m.id, f"{m.name} ({m.team.name})"))
+        self.team_member_ids.choices = generated_choices
+
 class ProjectLeaderNoteForm(FlaskForm):
     notes = TextAreaField('PL/QM Notiz',
                           validators=[DataRequired("Die Notiz darf nicht leer sein."),
