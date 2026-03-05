@@ -4,7 +4,7 @@ from app import db
 from app.models import User
 from app.forms import LoginForm
 from urllib.parse import urlparse
-from sqlalchemy import func  # <-- NEU: für case-insensitive Abfrage
+from sqlalchemy import func
 
 bp = Blueprint('auth', __name__)
 
@@ -14,7 +14,6 @@ def login():
         return redirect(url_for('main.index'))
     form = LoginForm()
     if form.validate_on_submit():
-        # Case-insensitive Suche nach Benutzername
         user = User.query.filter(func.lower(User.username) == func.lower(form.username.data)).first()
         if user is None or not user.check_password(form.password.data):
             flash('Ungültiger Benutzername oder Passwort.', 'danger')
