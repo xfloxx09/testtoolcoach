@@ -21,14 +21,28 @@
                         {% endif %}
                     </div>
 
+                    <!-- Projektauswahl (nur zur Filterung, wird nicht im Formular gespeichert) -->
+                    <div class="form-group">
+                        <label for="project_filter">Projekt</label>
+                        <select class="form-control" id="project_filter">
+                            <option value="">-- Projekt wählen --</option>
+                            {% for project in projects %}
+                                <option value="{{ project.id }}">{{ project.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="form-text text-muted">Wähle ein Projekt, um die Teams zu filtern.</small>
+                    </div>
+
                     <div class="form-group">
                         {{ form.team_id.label(class="form-control-label") }}
-                        {{ form.team_id(class="form-control custom-select " + ("is-invalid" if form.team_id.errors else "")) }}
-                        {% if form.team_id.choices[0][0] == 0 and form.team_id.choices[0][1] == "Bitte zuerst Teams erstellen" %}
-                            <small class="form-text text-danger">Es müssen zuerst Teams im System angelegt werden.</small>
-                        {% endif %}
+                        <select name="team_id" id="team_id" class="form-control custom-select" required>
+                            <option value="">-- Zuerst Projekt wählen --</option>
+                            {% for value, label in form.team_id.choices %}
+                                <option value="{{ value }}" data-project="{{ label.split('(')[-1].rstrip(')') }}" style="display: none;">{{ label }}</option>
+                            {% endfor %}
+                        </select>
                         {% if form.team_id.errors %}
-                            <div class="invalid-feedback">
+                            <div class="invalid-feedback d-block">
                                 {% for error in form.team_id.errors %}<span>{{ error }}</span>{% endfor %}
                             </div>
                         {% endif %}
@@ -43,4 +57,42 @@
         </div>
     </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const projectFilter = document.getElementById('project_filter');
+    const teamSelect = document.getElementById('team_id');
+    const teamOptions = Array.from(teamSelect.options).slice(1); // Alle außer dem ersten Placeholder
+
+    function filterTeams() {
+        const selectedProject = projectFilter.value;
+        teamOptions.forEach(option => {
+            // Das Projekt steht in Klammern am Ende des Labels, z.B. "Team A (Projekt X)"
+            const projectName = option.text.split('(').pop().replace(')', '').trim();
+            // Wir müssen die Projekt-ID mit dem Projektnamen abgleichen – besser wäre, wir hätten eine data-project-id.
+            // Da wir das im Template nicht haben, nutzen wir den Namen. Alternativ könnten wir im Formular die Choices mit data-attributen versehen.
+            // Hier eine einfache Lösung: Wir zeigen alle Optionen, wenn kein Projekt gewählt ist, sonst filtern wir nach Namen.
+            // Problem: Projektnamen könnten doppelt vorkommen? Nein, Projektnamen sind unique.
+            if (!selectedProject) {
+                option.style.display = 'block';
+            } else {
+                // Wir müssen den Projektnamen aus der Option ermitteln. Der Name steht in Klammern.
+                const projectNameFromOption = option.text.split('(').pop().replace(')', '').trim();
+                // Das ausgewählte Projekt als Namen ermitteln
+                const selectedProjectName = projectFilter.options[projectFilter.selectedIndex].text;
+                if (projectNameFromOption === selectedProjectName) {
+                    option.style.display = 'block';
+                } else {
+                    option.style.display = 'none';
+                }
+            }
+        });
+        // Placeholder-Option zurücksetzen
+        teamSelect.selectedIndex = 0;
+    }
+
+    projectFilter.addEventListener('change', filterTeams);
+    filterTeams(); // Initial ausführen
+});
+</script>
 {% endblock %}
