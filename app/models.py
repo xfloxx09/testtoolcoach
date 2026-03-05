@@ -1,22 +1,22 @@
 # app/models.py
-print("<<<< START models.py (MULTI-PROJEKT + ARCHIV-FILTER) GELADEN >>>>")
+print("<<<< START models.py (ARCHIV-HISTORIE) GELADEN >>>>")
 
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from app import db, login_manager
 from datetime import datetime, timezone
 
-# Assoziationstabelle für die n:m-Beziehung zwischen Teams und Teamleitern
 team_leaders = db.Table('team_leaders',
     db.Column('team_id', db.Integer, db.ForeignKey('teams.id', ondelete='CASCADE'), primary_key=True),
     db.Column('user_id', db.Integer, db.ForeignKey('users.id', ondelete='CASCADE'), primary_key=True)
 )
 
-# Assoziationstabelle für Workshop-Teilnehmer mit individueller Bewertung
 workshop_participants = db.Table('workshop_participants',
     db.Column('workshop_id', db.Integer, db.ForeignKey('workshops.id', ondelete='CASCADE'), primary_key=True),
     db.Column('team_member_id', db.Integer, db.ForeignKey('team_members.id', ondelete='CASCADE'), primary_key=True),
-    db.Column('individual_rating', db.Integer, nullable=True)
+    db.Column('individual_rating', db.Integer, nullable=True),
+    # NEU: Ursprüngliches Team des Teilnehmers (für historische Zuordnung)
+    db.Column('original_team_id', db.Integer, db.ForeignKey('teams.id'), nullable=True)
 )
 
 class Project(db.Model):
@@ -73,7 +73,6 @@ class Team(db.Model):
     )
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
 
-    # Wichtig: foreign_keys muss angegeben werden, da TeamMember jetzt zwei Fremdschlüssel auf teams hat
     members = db.relationship('TeamMember', backref='team', lazy='dynamic', foreign_keys='TeamMember.team_id')
     leaders = db.relationship('User', secondary=team_leaders, back_populates='teams_led', lazy='dynamic')
 
@@ -90,11 +89,10 @@ class TeamMember(db.Model):
                                          backref=db.backref('participants', lazy='dynamic'),
                                          lazy='dynamic')
 
-    # NEU: Felder für die ursprüngliche Zugehörigkeit (wenn im Archiv)
+    # Felder für die ursprüngliche Zugehörigkeit (wenn im Archiv)
     original_team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
     original_project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=True)
 
-    # Beziehungen für die ursprünglichen Daten
     original_team = db.relationship('Team', foreign_keys=[original_team_id])
     original_project = db.relationship('Project', foreign_keys=[original_project_id])
 
@@ -124,6 +122,12 @@ class Coaching(db.Model):
     time_spent = db.Column(db.Integer, nullable=True)
     project_leader_notes = db.Column(db.Text, nullable=True)
     project_id = db.Column(db.Integer, db.ForeignKey('projects.id'), nullable=False)
+
+    # NEU: Team-ID zum Zeitpunkt des Coachings (für historische Zuordnung)
+    team_id = db.Column(db.Integer, db.ForeignKey('teams.id'), nullable=True)
+
+    # Beziehung zum Team (für Abfragen)
+    team = db.relationship('Team', foreign_keys=[team_id])
 
     @property
     def leitfaden_fields_list(self):
@@ -196,4 +200,4 @@ class Workshop(db.Model):
     def __repr__(self):
         return f'<Workshop {self.id}: {self.title}>'
 
-print("<<<< ENDE models.py (MULTI-PROJEKT + ARCHIV-FILTER) GELADEN >>>>")
+print("<<<< ENDE models.py (ARCHIV-HISTORIE) GELADEN >>>>")
