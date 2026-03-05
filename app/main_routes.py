@@ -97,9 +97,7 @@ def get_coaching_subject_distribution(period_filter_str=None, selected_team_id_s
     return {'labels':[r.subject for r in res if r.subject],'values':[r.count for r in res if r.subject]}
 
 def get_visible_project_id():
-    """Ermittelt die aktuell sichtbare Projekt-ID für den Benutzer."""
     if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
-        # Aus Session oder Query-Parameter, sonst None
         return request.args.get('project', type=int) or session.get('active_project')
     else:
         return current_user.project_id
@@ -121,7 +119,7 @@ def coaching_dashboard():
     search_arg = request.args.get('search', default="", type=str).strip()
     project_filter = get_visible_project_id()
 
-    # Globale Statistiken (mit Projektfilter)
+    # Globale Statistiken
     global_q = Coaching.query.join(TeamMember, Coaching.team_member_id == TeamMember.id)\
                               .join(Team, TeamMember.team_id == Team.id)\
                               .filter(Team.name != ARCHIV_TEAM_NAME)
@@ -180,7 +178,7 @@ def coaching_dashboard():
     chart_perf = get_performance_data_for_charts(period_arg, team_arg, project_filter)
     chart_subj = get_coaching_subject_distribution(period_arg, team_arg, project_filter)
 
-    # Alle Teams für Filter (nur sichtbare Projekte)
+    # Alle Teams für Filter
     all_teams_query = Team.query.filter(Team.name != ARCHIV_TEAM_NAME)
     if project_filter:
         all_teams_query = all_teams_query.filter(Team.project_id == project_filter)
@@ -196,7 +194,7 @@ def coaching_dashboard():
     for m in range(now.month, 0, -1):
         m_opts.append({'value': f"{cy}-{m:02d}", 'text': f"{get_month_name_german(m)} {cy}"})
 
-    # Projektliste für Admins (für Dropdown)
+    # Projektliste für Admins
     all_projects = None
     if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
         all_projects = Project.query.order_by(Project.name).all()
@@ -269,7 +267,7 @@ def team_view():
             all_teams_for_selection = teams_query.order_by(Team.name).all()
         return render_template('main/team_view.html', title="Team Auswählen", team=None, all_teams_list=all_teams_for_selection, team_members_performance=[], team_coachings=[], config=current_app.config)
 
-    # Rest (Mitglieder-Statistiken)
+    # Mitglieder-Statistiken
     team_member_ids_in_selected_team = [member.id for member in selected_team_object.members]
     if team_member_ids_in_selected_team:
         team_coachings_list_for_display = Coaching.query.filter(Coaching.team_member_id.in_(team_member_ids_in_selected_team)).order_by(desc(Coaching.coaching_date)).limit(10).all()
@@ -302,7 +300,6 @@ def team_view():
 @login_required
 @role_required([ROLE_TEAMLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_ADMIN, ROLE_BETRIEBSLEITER])
 def add_coaching():
-    # Team-IDs für Teamleiter ermitteln
     if current_user.role == ROLE_TEAMLEITER:
         user_team_ids = [team.id for team in current_user.teams_led]
     else:
@@ -310,12 +307,12 @@ def add_coaching():
 
     form = CoachingForm(current_user_role=current_user.role, current_user_team_ids=user_team_ids)
 
-    # Projekt-ID bestimmen
     if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
         selected_project_id = request.args.get('project', type=int) or session.get('active_project') or current_user.project_id
     else:
         selected_project_id = current_user.project_id
 
+    # update_team_member_choices verwendet jetzt expliziten Join (siehe forms.py)
     form.update_team_member_choices(exclude_archiv=True, project_id=selected_project_id)
 
     if form.validate_on_submit():
@@ -369,6 +366,7 @@ def add_workshop():
     else:
         selected_project_id = current_user.project_id
 
+    # update_participant_choices verwendet jetzt expliziten Join
     form.update_participant_choices(project_id=selected_project_id)
 
     if form.validate_on_submit():
@@ -602,7 +600,11 @@ def pl_qm_dashboard():
     selected_team_id_filter_str = request.args.get('team_id_filter', None)
     project_filter = get_visible_project_id()
 
-    coachings_query = Coaching.query.join(TeamMember).join(Team).filter(Team.name != ARCHIV_TEAM_NAME)
+    # EXPLIZITE JOINS für Coaching -> TeamMember -> Team
+    coachings_query = Coaching.query.join(TeamMember, Coaching.team_member_id == TeamMember.id)\
+                                     .join(Team, TeamMember.team_id == Team.id)\
+                                     .filter(Team.name != ARCHIV_TEAM_NAME)
+
     if project_filter:
         coachings_query = coachings_query.filter(Coaching.project_id == project_filter)
 
@@ -642,7 +644,7 @@ def pl_qm_dashboard():
                                 page=request.args.get('page', 1, type=int),
                                 team_id_filter=selected_team_id_filter_str))
 
-    # Team-Statistiken (nur sichtbare Projekte)
+    # Team-Statistiken
     all_teams_data = []
     teams_query = Team.query.filter(Team.name != ARCHIV_TEAM_NAME)
     if project_filter:
