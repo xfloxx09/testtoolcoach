@@ -35,57 +35,62 @@
                     <button type="submit" class="btn btn-sm telekom-button btn-block">Filtern</button>
                 </div>
             </div>
-            <!-- Paginierungs-Parameter für andere Tabellen zurücksetzen? Wir setzen sie auf 1 -->
             <input type="hidden" name="page_users" value="1">
             <input type="hidden" name="page_teams" value="1">
             <input type="hidden" name="page_members" value="1">
             <input type="hidden" name="page_archiv" value="1">
         </form>
 
-        <table class="table table-sm">
-            <thead><tr><th>ID</th><th>Benutzername</th><th>Email</th><th>Rolle</th><th>Teams (als TL)</th><th>Aktionen</th></tr></thead>
-            <tbody>
-            {% for user in users_paginated.items %}
-            <tr>
-                <td>{{ user.id }}</td>
-                <td>{{ user.username }}</td>
-                <td>{{ user.email }}</td>
-                <td>{{ user.role }}</td>
-                <td>{% for team_led in user.teams_led %}{{ team_led.name }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}</td>
-                <td>
-                    <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" class="btn btn-xs btn-outline-secondary">Bearbeiten</a>
-                    {% if user.username != 'admin' and user.id != current_user.id %}
-                    <form action="{{ url_for('admin.delete_user', user_id=user.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Benutzer wirklich löschen?');">
-                        <input type="submit" value="Löschen" class="btn btn-xs btn-danger">
-                    </form>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-
-        <!-- Paginierung für Benutzer -->
-        {% if users_paginated.pages > 1 %}
-        <nav>
-            <ul class="pagination pagination-sm justify-content-center">
-                {% if users_paginated.has_prev %}
-                    <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_users=users_paginated.prev_num, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search) }}">Vorherige</a></li>
-                {% endif %}
-                {% for page_num in users_paginated.iter_pages() %}
-                    {% if page_num %}
-                        <li class="page-item {% if users_paginated.page == page_num %}active{% endif %}">
-                            <a class="page-link" href="{{ url_for('admin.panel', page_users=page_num, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search) }}">{{ page_num }}</a>
-                        </li>
-                    {% else %}
-                        <li class="page-item disabled"><span class="page-link">...</span></li>
-                    {% endif %}
+        {% set user_filter_active = filter_params.user_project or filter_params.user_role or filter_params.user_search %}
+        {% if user_filter_active or users_paginated.items %}
+            <table class="table table-sm">
+                <thead><tr><th>ID</th><th>Benutzername</th><th>Email</th><th>Rolle</th><th>Teams (als TL)</th><th>Aktionen</th></tr></thead>
+                <tbody>
+                {% for user in users_paginated.items %}
+                <tr>
+                    <td>{{ user.id }}</td>
+                    <td>{{ user.username }}</td>
+                    <td>{{ user.email }}</td>
+                    <td>{{ user.role }}</td>
+                    <td>{% for team_led in user.teams_led %}{{ team_led.name }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}</td>
+                    <td>
+                        <a href="{{ url_for('admin.edit_user', user_id=user.id) }}" class="btn btn-xs btn-outline-secondary">Bearbeiten</a>
+                        {% if user.username != 'admin' and user.id != current_user.id %}
+                        <form action="{{ url_for('admin.delete_user', user_id=user.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Benutzer wirklich löschen?');">
+                            <input type="submit" value="Löschen" class="btn btn-xs btn-danger">
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
                 {% endfor %}
-                {% if users_paginated.has_next %}
-                    <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_users=users_paginated.next_num, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search) }}">Nächste</a></li>
-                {% endif %}
-            </ul>
-        </nav>
+                </tbody>
+            </table>
+
+            {% if users_paginated.pages > 1 %}
+            <nav>
+                <ul class="pagination pagination-sm justify-content-center">
+                    {% if users_paginated.has_prev %}
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_users=users_paginated.prev_num, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search) }}">Vorherige</a></li>
+                    {% endif %}
+                    {% for page_num in users_paginated.iter_pages() %}
+                        {% if page_num %}
+                            <li class="page-item {% if users_paginated.page == page_num %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('admin.panel', page_users=page_num, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search) }}">{{ page_num }}</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if users_paginated.has_next %}
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_users=users_paginated.next_num, user_project=filter_params.user_project, user_role=filter_params.user_role, user_search=filter_params.user_search) }}">Nächste</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        {% elif not user_filter_active %}
+            <p class="text-muted">Keine Filter ausgewählt – bitte oben Filter setzen, um Benutzer anzuzeigen.</p>
+        {% else %}
+            <p class="text-muted">Keine Benutzer gefunden.</p>
         {% endif %}
     </div>
 </div>
@@ -117,47 +122,54 @@
             <input type="hidden" name="page_teams" value="1">
         </form>
 
-        <table class="table table-sm">
-            <thead><tr><th>ID</th><th>Name</th><th>Projekt</th><th>Teamleiter</th><th>Mitglieder</th><th>Aktionen</th></tr></thead>
-            <tbody>
-            {% for team in teams_paginated.items %}
-            <tr>
-                <td>{{ team.id }}</td>
-                <td>{{ team.name }}</td>
-                <td>{{ team.project_ref.name if team.project_ref else '-' }}</td>
-                <td>{% for leader in team.leaders %}{{ leader.username }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}</td>
-                <td>{{ team.members.count() }}</td>
-                <td>
-                    <a href="{{ url_for('admin.edit_team', team_id=team.id) }}" class="btn btn-xs btn-outline-secondary">Bearbeiten & Mitglieder</a>
-                    <form action="{{ url_for('admin.delete_team', team_id=team.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Team wirklich löschen? ACHTUNG: Nur wenn keine Mitglieder mehr zugeordnet sind!');">
-                        <input type="submit" value="Löschen" class="btn btn-xs btn-danger">
-                    </form>
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-
-        {% if teams_paginated.pages > 1 %}
-        <nav>
-            <ul class="pagination pagination-sm justify-content-center">
-                {% if teams_paginated.has_prev %}
-                    <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_teams=teams_paginated.prev_num, team_project=filter_params.team_project, team_search=filter_params.team_search) }}">Vorherige</a></li>
-                {% endif %}
-                {% for page_num in teams_paginated.iter_pages() %}
-                    {% if page_num %}
-                        <li class="page-item {% if teams_paginated.page == page_num %}active{% endif %}">
-                            <a class="page-link" href="{{ url_for('admin.panel', page_teams=page_num, team_project=filter_params.team_project, team_search=filter_params.team_search) }}">{{ page_num }}</a>
-                        </li>
-                    {% else %}
-                        <li class="page-item disabled"><span class="page-link">...</span></li>
-                    {% endif %}
+        {% set team_filter_active = filter_params.team_project or filter_params.team_search %}
+        {% if team_filter_active or teams_paginated.items %}
+            <table class="table table-sm">
+                <thead><tr><th>ID</th><th>Name</th><th>Projekt</th><th>Teamleiter</th><th>Mitglieder</th><th>Aktionen</th></tr></thead>
+                <tbody>
+                {% for team in teams_paginated.items %}
+                <tr>
+                    <td>{{ team.id }}</td>
+                    <td>{{ team.name }}</td>
+                    <td>{{ team.project_ref.name if team.project_ref else '-' }}</td>
+                    <td>{% for leader in team.leaders %}{{ leader.username }}{% if not loop.last %}, {% endif %}{% else %}-{% endfor %}</td>
+                    <td>{{ team.members.count() }}</td>
+                    <td>
+                        <a href="{{ url_for('admin.edit_team', team_id=team.id) }}" class="btn btn-xs btn-outline-secondary">Bearbeiten & Mitglieder</a>
+                        <form action="{{ url_for('admin.delete_team', team_id=team.id) }}" method="POST" style="display:inline;" onsubmit="return confirm('Team wirklich löschen? ACHTUNG: Nur wenn keine Mitglieder mehr zugeordnet sind!');">
+                            <input type="submit" value="Löschen" class="btn btn-xs btn-danger">
+                        </form>
+                    </td>
+                </tr>
                 {% endfor %}
-                {% if teams_paginated.has_next %}
-                    <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_teams=teams_paginated.next_num, team_project=filter_params.team_project, team_search=filter_params.team_search) }}">Nächste</a></li>
-                {% endif %}
-            </ul>
-        </nav>
+                </tbody>
+            </table>
+
+            {% if teams_paginated.pages > 1 %}
+            <nav>
+                <ul class="pagination pagination-sm justify-content-center">
+                    {% if teams_paginated.has_prev %}
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_teams=teams_paginated.prev_num, team_project=filter_params.team_project, team_search=filter_params.team_search) }}">Vorherige</a></li>
+                    {% endif %}
+                    {% for page_num in teams_paginated.iter_pages() %}
+                        {% if page_num %}
+                            <li class="page-item {% if teams_paginated.page == page_num %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('admin.panel', page_teams=page_num, team_project=filter_params.team_project, team_search=filter_params.team_search) }}">{{ page_num }}</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if teams_paginated.has_next %}
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_teams=teams_paginated.next_num, team_project=filter_params.team_project, team_search=filter_params.team_search) }}">Nächste</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        {% elif not team_filter_active %}
+            <p class="text-muted">Keine Filter ausgewählt – bitte oben Filter setzen, um Teams anzuzeigen.</p>
+        {% else %}
+            <p class="text-muted">Keine Teams gefunden.</p>
         {% endif %}
     </div>
 </div>
@@ -197,43 +209,50 @@
             <input type="hidden" name="page_members" value="1">
         </form>
 
-        <table class="table table-sm">
-            <thead><tr><th>ID</th><th>Name</th><th>Team</th><th>Projekt</th><th>Aktionen</th></tr></thead>
-            <tbody>
-            {% for member in members_paginated.items %}
-            <tr>
-                <td>{{ member.id }}</td>
-                <td>{{ member.name }}</td>
-                <td>{{ member.team.name }}</td>
-                <td>{{ member.team.project_ref.name if member.team.project_ref else '-' }}</td>
-                <td>
-                    <a href="{{ url_for('admin.edit_team_member', member_id=member.id) }}" class="btn btn-xs btn-outline-secondary">Bearbeiten</a>
-                </td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-
-        {% if members_paginated.pages > 1 %}
-        <nav>
-            <ul class="pagination pagination-sm justify-content-center">
-                {% if members_paginated.has_prev %}
-                    <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_members=members_paginated.prev_num, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search) }}">Vorherige</a></li>
-                {% endif %}
-                {% for page_num in members_paginated.iter_pages() %}
-                    {% if page_num %}
-                        <li class="page-item {% if members_paginated.page == page_num %}active{% endif %}">
-                            <a class="page-link" href="{{ url_for('admin.panel', page_members=page_num, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search) }}">{{ page_num }}</a>
-                        </li>
-                    {% else %}
-                        <li class="page-item disabled"><span class="page-link">...</span></li>
-                    {% endif %}
+        {% set member_filter_active = filter_params.member_project or filter_params.member_team or filter_params.member_search %}
+        {% if member_filter_active or members_paginated.items %}
+            <table class="table table-sm">
+                <thead><tr><th>ID</th><th>Name</th><th>Team</th><th>Projekt</th><th>Aktionen</th></tr></thead>
+                <tbody>
+                {% for member in members_paginated.items %}
+                <tr>
+                    <td>{{ member.id }}</td>
+                    <td>{{ member.name }}</td>
+                    <td>{{ member.team.name }}</td>
+                    <td>{{ member.team.project_ref.name if member.team.project_ref else '-' }}</td>
+                    <td>
+                        <a href="{{ url_for('admin.edit_team_member', member_id=member.id) }}" class="btn btn-xs btn-outline-secondary">Bearbeiten</a>
+                    </td>
+                </tr>
                 {% endfor %}
-                {% if members_paginated.has_next %}
-                    <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_members=members_paginated.next_num, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search) }}">Nächste</a></li>
-                {% endif %}
-            </ul>
-        </nav>
+                </tbody>
+            </table>
+
+            {% if members_paginated.pages > 1 %}
+            <nav>
+                <ul class="pagination pagination-sm justify-content-center">
+                    {% if members_paginated.has_prev %}
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_members=members_paginated.prev_num, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search) }}">Vorherige</a></li>
+                    {% endif %}
+                    {% for page_num in members_paginated.iter_pages() %}
+                        {% if page_num %}
+                            <li class="page-item {% if members_paginated.page == page_num %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('admin.panel', page_members=page_num, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search) }}">{{ page_num }}</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    {% if members_paginated.has_next %}
+                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_members=members_paginated.next_num, member_project=filter_params.member_project, member_team=filter_params.member_team, member_search=filter_params.member_search) }}">Nächste</a></li>
+                    {% endif %}
+                </ul>
+            </nav>
+            {% endif %}
+        {% elif not member_filter_active %}
+            <p class="text-muted">Keine Filter ausgewählt – bitte oben Filter setzen, um aktive Teammitglieder anzuzeigen.</p>
+        {% else %}
+            <p class="text-muted">Keine aktiven Teammitglieder gefunden.</p>
         {% endif %}
     </div>
 </div>
@@ -260,58 +279,65 @@
                 <input type="hidden" name="page_archiv" value="1">
             </form>
 
-            <table class="table table-sm table-bordered">
-                <thead class="thead-light">
+            {% set archiv_filter_active = filter_params.archiv_search %}
+            {% if archiv_filter_active or archiv_paginated.items %}
+                <table class="table table-sm table-bordered">
+                    <thead class="thead-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Aktion</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for member in archiv_paginated.items %}
                     <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Aktion</th>
+                       <td>{{ member.id }}</td>
+                       <td>{{ member.name }}</td>
+                       <td>
+                           <a href="{{ url_for('admin.edit_team_member', member_id=member.id) }}" class="btn btn-xs btn-outline-success">Reaktivieren / Bearbeiten</a>
+                       </td>
                     </tr>
-                </thead>
-                <tbody>
-                {% for member in archiv_paginated.items %}
-                <tr>
-                   <td>{{ member.id }}</td>
-                   <td>{{ member.name }}</td>
-                   <td>
-                       <a href="{{ url_for('admin.edit_team_member', member_id=member.id) }}" class="btn btn-xs btn-outline-success">Reaktivieren / Bearbeiten</a>
-                   </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="3" class="text-center">Das Archiv ist leer.</td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-
-            {% if archiv_paginated.pages > 1 %}
-            <nav>
-                <ul class="pagination pagination-sm justify-content-center">
-                    {% if archiv_paginated.has_prev %}
-                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_archiv=archiv_paginated.prev_num, archiv_search=filter_params.archiv_search) }}">Vorherige</a></li>
-                    {% endif %}
-                    {% for page_num in archiv_paginated.iter_pages() %}
-                        {% if page_num %}
-                            <li class="page-item {% if archiv_paginated.page == page_num %}active{% endif %}">
-                                <a class="page-link" href="{{ url_for('admin.panel', page_archiv=page_num, archiv_search=filter_params.archiv_search) }}">{{ page_num }}</a>
-                            </li>
-                        {% else %}
-                            <li class="page-item disabled"><span class="page-link">...</span></li>
-                        {% endif %}
+                    {% else %}
+                    <tr>
+                        <td colspan="3" class="text-center">Das Archiv ist leer.</td>
+                    </tr>
                     {% endfor %}
-                    {% if archiv_paginated.has_next %}
-                        <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_archiv=archiv_paginated.next_num, archiv_search=filter_params.archiv_search) }}">Nächste</a></li>
-                    {% endif %}
-                </ul>
-            </nav>
+                    </tbody>
+                </table>
+
+                {% if archiv_paginated.pages > 1 %}
+                <nav>
+                    <ul class="pagination pagination-sm justify-content-center">
+                        {% if archiv_paginated.has_prev %}
+                            <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_archiv=archiv_paginated.prev_num, archiv_search=filter_params.archiv_search) }}">Vorherige</a></li>
+                        {% endif %}
+                        {% for page_num in archiv_paginated.iter_pages() %}
+                            {% if page_num %}
+                                <li class="page-item {% if archiv_paginated.page == page_num %}active{% endif %}">
+                                    <a class="page-link" href="{{ url_for('admin.panel', page_archiv=page_num, archiv_search=filter_params.archiv_search) }}">{{ page_num }}</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                            {% endif %}
+                        {% endfor %}
+                        {% if archiv_paginated.has_next %}
+                            <li class="page-item"><a class="page-link" href="{{ url_for('admin.panel', page_archiv=archiv_paginated.next_num, archiv_search=filter_params.archiv_search) }}">Nächste</a></li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+            {% elif not archiv_filter_active %}
+                <p class="text-muted">Keine Filter ausgewählt – bitte oben Filter setzen, um archivierte Mitglieder anzuzeigen.</p>
+            {% else %}
+                <p class="text-muted">Keine archivierten Mitglieder gefunden.</p>
             {% endif %}
         </div>
     </div>
 </div>
 
 <script>
-// Optional: Chevron drehen beim Ein-/Ausklappen (Bootstrap macht das von selbst nicht)
+// Chevron drehen beim Ein-/Ausklappen
 document.querySelectorAll('[data-toggle="collapse"]').forEach(button => {
     button.addEventListener('click', function() {
         const icon = this.querySelector('i.fa-chevron-down, i.fa-chevron-up');
