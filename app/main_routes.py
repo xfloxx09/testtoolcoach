@@ -1,10 +1,10 @@
 # app/main_routes.py
-from flask import Blueprint, render_template, redirect, url_for, flash, request, abort, current_app, jsonify
+from flask import Blueprint, render_template, redirect, url_for, flash, request, abort, current_app, jsonify, session
 from flask_login import login_required, current_user
 from app import db
-from app.models import User, Team, TeamMember, Coaching, Workshop, workshop_participants
+from app.models import User, Team, TeamMember, Coaching, Workshop, workshop_participants, Project
 from app.forms import CoachingForm, ProjectLeaderNoteForm, PasswordChangeForm, WorkshopForm
-from app.utils import role_required, ROLE_ADMIN, ROLE_PROJEKTLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_TEAMLEITER, ROLE_ABTEILUNGSLEITER, ARCHIV_TEAM_NAME
+from app.utils import role_required, ROLE_ADMIN, ROLE_BETRIEBSLEITER, ROLE_PROJEKTLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_TEAMLEITER, ROLE_ABTEILUNGSLEITER, ARCHIV_TEAM_NAME
 from sqlalchemy import desc, func, or_, and_
 from datetime import datetime, timedelta, timezone
 import sqlalchemy
@@ -12,7 +12,7 @@ from calendar import monthrange
 
 bp = Blueprint('main', __name__)
 
-# --- HILFSFUNKTIONEN (unverändert) ---
+# --- HILFSFUNKTIONEN ---
 def get_month_name_german(month_number):
     months_german = {1:"Januar",2:"Februar",3:"März",4:"April",5:"Mai",6:"Juni",7:"Juli",8:"August",9:"September",10:"Oktober",11:"November",12:"Dezember"}
     return months_german.get(month_number, "")
@@ -39,15 +39,17 @@ def calculate_date_range(period_filter_str=None):
             pass
     return start_date,end_date
 
-def get_filtered_coachings_subquery(period_filter_str=None):
+def get_filtered_coachings_subquery(period_filter_str=None, project_id=None):
     q = db.session.query(Coaching.id.label("coaching_id_sq"),Coaching.team_member_id.label("team_member_id_sq"),Coaching.performance_mark.label("performance_mark_sq"),Coaching.time_spent.label("time_spent_sq"),Coaching.coaching_subject.label("coaching_subject_sq"))
     s_d,e_d = calculate_date_range(period_filter_str)
     if s_d: q=q.filter(Coaching.coaching_date>=s_d)
     if e_d: q=q.filter(Coaching.coaching_date<=e_d)
+    if project_id:
+        q = q.filter(Coaching.project_id == project_id)
     return q.subquery('filtered_coachings_sq')
 
-def get_performance_data_for_charts(period_filter_str=None, selected_team_id_str=None):
-    sq = get_filtered_coachings_subquery(period_filter_str)
+def get_performance_data_for_charts(period_filter_str=None, selected_team_id_str=None, project_id=None):
+    sq = get_filtered_coachings_subquery(period_filter_str, project_id)
     q = db.session.query(
         Team.id.label('team_id'),
         Team.name.label('team_name'),
@@ -59,6 +61,9 @@ def get_performance_data_for_charts(period_filter_str=None, selected_team_id_str
      .outerjoin(sq, TeamMember.id == sq.c.team_member_id_sq)
 
     q = q.filter(Team.name != ARCHIV_TEAM_NAME)
+
+    if project_id:
+        q = q.filter(Team.project_id == project_id)
 
     if selected_team_id_str and selected_team_id_str.isdigit():
         q = q.filter(Team.id == int(selected_team_id_str))
@@ -74,13 +79,16 @@ def get_performance_data_for_charts(period_filter_str=None, selected_team_id_str
         'coachings_done_values': [r.num_coachings for r in res]
     }
 
-def get_coaching_subject_distribution(period_filter_str=None, selected_team_id_str=None):
-    sq=get_filtered_coachings_subquery(period_filter_str)
+def get_coaching_subject_distribution(period_filter_str=None, selected_team_id_str=None, project_id=None):
+    sq=get_filtered_coachings_subquery(period_filter_str, project_id)
     q=db.session.query(sq.c.coaching_subject_sq.label('subject'),func.count(sq.c.coaching_id_sq).label('count')).select_from(sq).filter(sq.c.coaching_subject_sq.isnot(None)).filter(sq.c.coaching_subject_sq != '')
 
     q = q.join(TeamMember, sq.c.team_member_id_sq == TeamMember.id)\
          .join(Team, TeamMember.team_id == Team.id)\
          .filter(Team.name != ARCHIV_TEAM_NAME)
+
+    if project_id:
+        q = q.filter(Team.project_id == project_id)
 
     if selected_team_id_str and selected_team_id_str.isdigit():
         q = q.filter(TeamMember.team_id==int(selected_team_id_str))
@@ -88,51 +96,70 @@ def get_coaching_subject_distribution(period_filter_str=None, selected_team_id_s
     res=q.group_by(sq.c.coaching_subject_sq).order_by(desc('count')).all()
     return {'labels':[r.subject for r in res if r.subject],'values':[r.count for r in res if r.subject]}
 
+def get_visible_project_id():
+    """Ermittelt die aktuell sichtbare Projekt-ID für den Benutzer."""
+    if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
+        # Aus Session oder Query-Parameter, sonst None
+        return request.args.get('project', type=int) or session.get('active_project')
+    else:
+        return current_user.project_id
+
 # --- ROUTEN ---
 
 @bp.route('/')
 @bp.route('/index')
 @login_required
 def index():
-    # Auswahlseite: zwei große Buttons
     return render_template('main/index_choice.html', config=current_app.config)
-
 
 @bp.route('/coaching-dashboard')
 @login_required
 def coaching_dashboard():
-    page=request.args.get('page',1,type=int); period_arg=request.args.get('period','all'); team_arg=request.args.get('team',"all"); search_arg=request.args.get('search',default="",type=str).strip()
+    page = request.args.get('page', 1, type=int)
+    period_arg = request.args.get('period', 'all')
+    team_arg = request.args.get('team', "all")
+    search_arg = request.args.get('search', default="", type=str).strip()
+    project_filter = get_visible_project_id()
 
-    global_q=Coaching.query.join(TeamMember, Coaching.team_member_id == TeamMember.id)\
-                          .join(Team, TeamMember.team_id == Team.id)\
-                          .filter(Team.name != ARCHIV_TEAM_NAME)
+    # Globale Statistiken (mit Projektfilter)
+    global_q = Coaching.query.join(TeamMember, Coaching.team_member_id == TeamMember.id)\
+                              .join(Team, TeamMember.team_id == Team.id)\
+                              .filter(Team.name != ARCHIV_TEAM_NAME)
 
-    gs_d,ge_d=calculate_date_range(period_arg)
-    if gs_d: global_q=global_q.filter(Coaching.coaching_date>=gs_d)
-    if ge_d: global_q=global_q.filter(Coaching.coaching_date<=ge_d)
-    global_total_coachings=global_q.count(); global_time_obj=global_q.with_entities(func.sum(Coaching.time_spent)).scalar(); global_time=global_time_obj if global_time_obj else 0
-    global_time_display=f"{global_time//60} Std. {global_time%60} Min. ({global_time} Min.)"
+    if project_filter:
+        global_q = global_q.filter(Coaching.project_id == project_filter)
 
-    list_q=Coaching.query.join(TeamMember,Coaching.team_member_id==TeamMember.id).join(Team, TeamMember.team_id == Team.id).join(User,Coaching.coach_id==User.id,isouter=True)
-    list_q = list_q.filter(Team.name != ARCHIV_TEAM_NAME)
+    gs_d, ge_d = calculate_date_range(period_arg)
+    if gs_d: global_q = global_q.filter(Coaching.coaching_date >= gs_d)
+    if ge_d: global_q = global_q.filter(Coaching.coaching_date <= ge_d)
+    global_total_coachings = global_q.count()
+    global_time_obj = global_q.with_entities(func.sum(Coaching.time_spent)).scalar()
+    global_time = global_time_obj if global_time_obj else 0
+    global_time_display = f"{global_time//60} Std. {global_time%60} Min. ({global_time} Min.)"
 
-    ls_d,le_d=calculate_date_range(period_arg)
-    if ls_d: list_q=list_q.filter(Coaching.coaching_date>=ls_d)
-    if le_d: list_q=list_q.filter(Coaching.coaching_date<=le_d)
+    # Liste für Tabelle
+    list_q = Coaching.query.join(TeamMember, Coaching.team_member_id == TeamMember.id)\
+                           .join(Team, TeamMember.team_id == Team.id)\
+                           .join(User, Coaching.coach_id == User.id, isouter=True)\
+                           .filter(Team.name != ARCHIV_TEAM_NAME)
 
-    # --- Teamleiter-Filter anpassen ---
+    if project_filter:
+        list_q = list_q.filter(Coaching.project_id == project_filter)
+
+    ls_d, le_d = calculate_date_range(period_arg)
+    if ls_d: list_q = list_q.filter(Coaching.coaching_date >= ls_d)
+    if le_d: list_q = list_q.filter(Coaching.coaching_date <= le_d)
+
+    # Teamleiter-Filter
     if current_user.role == ROLE_TEAMLEITER:
-        # Alle Teams, die dieser User leitet
         led_team_ids = [team.id for team in current_user.teams_led]
         if not led_team_ids:
             flash("Sie leiten derzeit kein Team.", "warning")
-            list_q = list_q.filter(sqlalchemy.sql.false())  # keine Ergebnisse
+            list_q = list_q.filter(sqlalchemy.sql.false())
         else:
-            # Mitglieder-IDs aus diesen Teams
             tm_ids = TeamMember.query.filter(TeamMember.team_id.in_(led_team_ids)).all()
             tm_ids_list = [m.id for m in tm_ids]
             if not tm_ids_list:
-                # Keine Mitglieder in den Teams, aber Coach darf eigene Coachings sehen
                 list_q = list_q.filter(Coaching.coach_id == current_user.id)
             else:
                 list_q = list_q.filter(or_(Coaching.team_member_id.in_(tm_ids_list), Coaching.coach_id == current_user.id))
@@ -140,19 +167,39 @@ def coaching_dashboard():
         list_q = list_q.filter(TeamMember.team_id == int(team_arg))
 
     if search_arg:
-        list_q=list_q.filter(or_(TeamMember.name.ilike(f"%{search_arg}%"),User.username.ilike(f"%{search_arg}%"),Coaching.coaching_subject.ilike(f"%{search_arg}%")))
+        list_q = list_q.filter(or_(
+            TeamMember.name.ilike(f"%{search_arg}%"),
+            User.username.ilike(f"%{search_arg}%"),
+            Coaching.coaching_subject.ilike(f"%{search_arg}%")
+        ))
 
-    total_filtered_list=list_q.count()
-    coachings_page=list_q.order_by(desc(Coaching.coaching_date)).paginate(page=page,per_page=10,error_out=False)
+    total_filtered_list = list_q.count()
+    coachings_page = list_q.order_by(desc(Coaching.coaching_date)).paginate(page=page, per_page=10, error_out=False)
 
-    chart_perf=get_performance_data_for_charts(period_arg,team_arg)
-    chart_subj=get_coaching_subject_distribution(period_arg,team_arg)
+    # Chart-Daten mit Projektfilter
+    chart_perf = get_performance_data_for_charts(period_arg, team_arg, project_filter)
+    chart_subj = get_coaching_subject_distribution(period_arg, team_arg, project_filter)
 
-    all_teams_dd=Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
+    # Alle Teams für Filter (nur sichtbare Projekte)
+    all_teams_query = Team.query.filter(Team.name != ARCHIV_TEAM_NAME)
+    if project_filter:
+        all_teams_query = all_teams_query.filter(Team.project_id == project_filter)
+    all_teams_dd = all_teams_query.order_by(Team.name).all()
 
-    now=datetime.now(timezone.utc); cy=now.year; py=cy-1; m_opts=[]
-    for m in range(12,0,-1): m_opts.append({'value':f"{py}-{m:02d}",'text':f"{get_month_name_german(m)} {py}"})
-    for m in range(now.month,0,-1): m_opts.append({'value':f"{cy}-{m:02d}",'text':f"{get_month_name_german(m)} {cy}"})
+    # Monatsoptionen
+    now = datetime.now(timezone.utc)
+    cy = now.year
+    py = cy - 1
+    m_opts = []
+    for m in range(12, 0, -1):
+        m_opts.append({'value': f"{py}-{m:02d}", 'text': f"{get_month_name_german(m)} {py}"})
+    for m in range(now.month, 0, -1):
+        m_opts.append({'value': f"{cy}-{m:02d}", 'text': f"{get_month_name_german(m)} {cy}"})
+
+    # Projektliste für Admins (für Dropdown)
+    all_projects = None
+    if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
+        all_projects = Project.query.order_by(Project.name).all()
 
     return render_template('main/index.html',
                            title='Coaching - Dashboard',
@@ -171,26 +218,26 @@ def coaching_dashboard():
                            global_total_coachings_count=global_total_coachings,
                            global_time_coached_display=global_time_display,
                            month_options=m_opts,
+                           all_projects=all_projects,
+                           current_project_filter=project_filter,
                            config=current_app.config)
-
 
 @bp.route('/team_view', methods=['GET'])
 @login_required
-@role_required([ROLE_TEAMLEITER, ROLE_ADMIN, ROLE_PROJEKTLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_ABTEILUNGSLEITER])
+@role_required([ROLE_TEAMLEITER, ROLE_ADMIN, ROLE_BETRIEBSLEITER, ROLE_PROJEKTLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_ABTEILUNGSLEITER])
 def team_view():
     selected_team_object = None
     team_coachings_list_for_display = []
     team_members_stats = []
     view_team_id_arg = request.args.get('team_id', type=int)
+    project_filter = get_visible_project_id()
     page_title = "Team Ansicht"
 
-    # --- Teamleiter-Logik anpassen ---
     if current_user.role == ROLE_TEAMLEITER and not view_team_id_arg:
         led_team_ids = [team.id for team in current_user.teams_led]
         if not led_team_ids:
             flash("Sie leiten derzeit kein Team.", "warning")
             return redirect(url_for('main.index'))
-        # Standardmäßig das erste Team anzeigen
         selected_team_object = Team.query.get(led_team_ids[0])
         if selected_team_object:
             page_title = f"Mein Team: {selected_team_object.name}"
@@ -198,25 +245,31 @@ def team_view():
             flash("Zugewiesenes Team nicht gefunden.", "danger")
             return redirect(url_for('main.index'))
     elif view_team_id_arg:
-        if current_user.role not in [ROLE_ADMIN, ROLE_PROJEKTLEITER, ROLE_ABTEILUNGSLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER]:
+        if current_user.role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER, ROLE_PROJEKTLEITER, ROLE_ABTEILUNGSLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER]:
             abort(403)
         selected_team_object = Team.query.get(view_team_id_arg)
         if selected_team_object:
             page_title = f"Team Ansicht: {selected_team_object.name}"
     else:
-        if current_user.role in [ROLE_ADMIN, ROLE_PROJEKTLEITER, ROLE_ABTEILUNGSLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER]:
-            selected_team_object = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).first()
+        if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER, ROLE_PROJEKTLEITER, ROLE_ABTEILUNGSLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER]:
+            teams_query = Team.query.filter(Team.name != ARCHIV_TEAM_NAME)
+            if project_filter:
+                teams_query = teams_query.filter(Team.project_id == project_filter)
+            selected_team_object = teams_query.order_by(Team.name).first()
             if selected_team_object:
                 page_title = f"Team Ansicht: {selected_team_object.name}"
 
     if not selected_team_object:
         flash("Kein Team zum Anzeigen ausgewählt oder vorhanden.", "info")
         all_teams_for_selection = []
-        if current_user.role in [ROLE_ADMIN, ROLE_PROJEKTLEITER, ROLE_ABTEILUNGSLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER]:
-            all_teams_for_selection = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
+        if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER, ROLE_PROJEKTLEITER, ROLE_ABTEILUNGSLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER]:
+            teams_query = Team.query.filter(Team.name != ARCHIV_TEAM_NAME)
+            if project_filter:
+                teams_query = teams_query.filter(Team.project_id == project_filter)
+            all_teams_for_selection = teams_query.order_by(Team.name).all()
         return render_template('main/team_view.html', title="Team Auswählen", team=None, all_teams_list=all_teams_for_selection, team_members_performance=[], team_coachings=[], config=current_app.config)
 
-    # Rest der Funktion unverändert (Mitglieder-Statistiken etc.)
+    # Rest (Mitglieder-Statistiken) unverändert
     team_member_ids_in_selected_team = [member.id for member in selected_team_object.members]
     if team_member_ids_in_selected_team:
         team_coachings_list_for_display = Coaching.query.filter(Coaching.team_member_id.in_(team_member_ids_in_selected_team)).order_by(desc(Coaching.coaching_date)).limit(10).all()
@@ -232,10 +285,11 @@ def team_view():
         team_members_stats.append({'id': member.id, 'name': member.name, 'avg_score': round(avg_score_val, 2), 'avg_leitfaden_adherence': round(avg_leitfaden_adherence_val, 1), 'total_coachings': len(member_coachings_list), 'raw_total_coaching_time': total_coaching_time_minutes_val, 'formatted_total_coaching_time': formatted_time_str})
 
     all_teams_for_dropdown = []
-    if current_user.role in [ROLE_ADMIN, ROLE_PROJEKTLEITER, ROLE_ABTEILUNGSLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER]:
-        all_teams_for_dropdown = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
-    # Für Teamleiter könnten wir auch eine Liste seiner Teams anbieten, aber das ist optional
-    # Hier belassen wir es bei der Admin-Ansicht
+    if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER, ROLE_PROJEKTLEITER, ROLE_ABTEILUNGSLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER]:
+        teams_query = Team.query.filter(Team.name != ARCHIV_TEAM_NAME)
+        if project_filter:
+            teams_query = teams_query.filter(Team.project_id == project_filter)
+        all_teams_for_dropdown = teams_query.order_by(Team.name).all()
 
     return render_template('main/team_view.html',
                            title=page_title, team=selected_team_object,
@@ -244,18 +298,26 @@ def team_view():
                            all_teams_list=all_teams_for_dropdown,
                            config=current_app.config)
 
-
 @bp.route('/coaching/add', methods=['GET', 'POST'])
 @login_required
-@role_required([ROLE_TEAMLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_ADMIN])
+@role_required([ROLE_TEAMLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_ADMIN, ROLE_BETRIEBSLEITER])
 def add_coaching():
     # Team-IDs für Teamleiter ermitteln
     if current_user.role == ROLE_TEAMLEITER:
         user_team_ids = [team.id for team in current_user.teams_led]
     else:
         user_team_ids = []
+
     form = CoachingForm(current_user_role=current_user.role, current_user_team_ids=user_team_ids)
-    form.update_team_member_choices(exclude_archiv=True)
+
+    # Projekt-ID bestimmen
+    if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
+        # Kann aus Formular kommen oder aus Session/Query
+        selected_project_id = request.args.get('project', type=int) or session.get('active_project') or current_user.project_id
+    else:
+        selected_project_id = current_user.project_id
+
+    form.update_team_member_choices(exclude_archiv=True, project_id=selected_project_id)
 
     if form.validate_on_submit():
         try:
@@ -263,7 +325,7 @@ def add_coaching():
                 team_member_id=form.team_member_id.data,
                 coach_id=current_user.id,
                 coaching_style=form.coaching_style.data,
-                tcap_id=form.tcap_id.data if form.coaching_style.data=='TCAP' and form.tcap_id.data else None,
+                tcap_id=form.tcap_id.data if form.coaching_style.data == 'TCAP' and form.tcap_id.data else None,
                 coaching_subject=form.coaching_subject.data,
                 coach_notes=form.coach_notes.data if form.coach_notes.data else None,
                 leitfaden_begruessung=form.leitfaden_begruessung.data,
@@ -274,12 +336,13 @@ def add_coaching():
                 leitfaden_zusammenfassung=form.leitfaden_zusammenfassung.data,
                 leitfaden_kzb=form.leitfaden_kzb.data,
                 performance_mark=form.performance_mark.data,
-                time_spent=form.time_spent.data
+                time_spent=form.time_spent.data,
+                project_id=selected_project_id
             )
             db.session.add(coaching)
             db.session.commit()
             flash('Coaching erfolgreich gespeichert!', 'success')
-            return redirect(url_for('main.index'))
+            return redirect(url_for('main.coaching_dashboard'))
         except Exception as e:
             db.session.rollback()
             current_app.logger.error(f"Add coaching error: {e}")
@@ -291,18 +354,23 @@ def add_coaching():
     tcap_js = "document.addEventListener('DOMContentLoaded',function(){var s=document.getElementById('coaching_style'),t=document.getElementById('tcap_id_field'),i=document.getElementById('tcap_id');function o(){if(s&&t&&i)if(s.value==='TCAP'){t.style.display='';i.required=!0}else{t.style.display='none';i.required=!1;i.value=''}}s&&t&&i&&(s.addEventListener('change',o),o())});"
     return render_template('main/add_coaching.html', title='Coaching hinzufügen', form=form, tcap_js=tcap_js, is_edit_mode=False, config=current_app.config)
 
-
 @bp.route('/workshop/add', methods=['GET', 'POST'])
 @login_required
-@role_required([ROLE_TEAMLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_ADMIN])
+@role_required([ROLE_TEAMLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_ADMIN, ROLE_BETRIEBSLEITER])
 def add_workshop():
-    # Team-IDs für Teamleiter ermitteln
     if current_user.role == ROLE_TEAMLEITER:
         user_team_ids = [team.id for team in current_user.teams_led]
     else:
         user_team_ids = []
+
     form = WorkshopForm(current_user_role=current_user.role, current_user_team_ids=user_team_ids)
-    form.update_participant_choices()
+
+    if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
+        selected_project_id = request.args.get('project', type=int) or session.get('active_project') or current_user.project_id
+    else:
+        selected_project_id = current_user.project_id
+
+    form.update_participant_choices(project_id=selected_project_id)
 
     if form.validate_on_submit():
         try:
@@ -311,12 +379,12 @@ def add_workshop():
                 coach_id=current_user.id,
                 overall_rating=form.overall_rating.data,
                 time_spent=form.time_spent.data,
-                notes=form.notes.data if form.notes.data else None
+                notes=form.notes.data if form.notes.data else None,
+                project_id=selected_project_id
             )
             db.session.add(workshop)
-            db.session.flush()  # um workshop.id zu erhalten
+            db.session.flush()
 
-            # Teilnehmer mit individuellen Bewertungen verknüpfen
             for member_id in form.team_member_ids.data:
                 individual_rating_key = f'individual_rating_{member_id}'
                 individual_rating = request.form.get(individual_rating_key, type=int)
@@ -339,7 +407,6 @@ def add_workshop():
             db.session.rollback()
             current_app.logger.error(f"Add workshop error: {e}")
             flash(f'Fehler: {str(e)}', 'danger')
-
     elif request.method == 'POST':
         for field, errors in form.errors.items():
             field_label = getattr(form, field).label.text if hasattr(getattr(form, field), 'label') else field
@@ -347,31 +414,28 @@ def add_workshop():
 
     return render_template('main/add_workshop.html', title='Workshop hinzufügen', form=form, is_edit_mode=False, config=current_app.config)
 
-
 @bp.route('/workshop/<int:workshop_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_workshop(workshop_id):
     workshop_to_edit = Workshop.query.get_or_404(workshop_id)
 
-    # Berechtigungsprüfung: nur der Coach selbst oder Admin
-    if not (current_user.id == workshop_to_edit.coach_id or current_user.role == ROLE_ADMIN):
+    # Berechtigung: nur Coach selbst oder Admin/Betriebsleiter
+    if not (current_user.id == workshop_to_edit.coach_id or current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]):
         flash('Sie haben keine Berechtigung, diesen Workshop zu bearbeiten.', 'danger')
         abort(403)
 
-    # Team-IDs für Teamleiter (falls relevant)
+    # Prüfen, ob User Zugriff auf das Projekt hat
+    if current_user.role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER] and current_user.project_id != workshop_to_edit.project_id:
+        abort(403)
+
     if current_user.role == ROLE_TEAMLEITER:
         user_team_ids = [team.id for team in current_user.teams_led]
     else:
-        user_team_ids = []  # Admin oder Coach ohne Teamleiter-Rolle sehen alle
+        user_team_ids = []
 
-    form = WorkshopForm(
-        obj=workshop_to_edit,
-        current_user_role=current_user.role,
-        current_user_team_ids=user_team_ids
-    )
-    form.update_participant_choices()
+    form = WorkshopForm(obj=workshop_to_edit, current_user_role=current_user.role, current_user_team_ids=user_team_ids)
+    form.update_participant_choices(project_id=workshop_to_edit.project_id)
 
-    # Bestehende Teilnehmer-IDs vorauswählen
     existing_participant_ids = [p.id for p in workshop_to_edit.participants]
     form.team_member_ids.data = existing_participant_ids
 
@@ -409,7 +473,6 @@ def edit_workshop(workshop_id):
             current_app.logger.error(f"Edit workshop error: {e}")
             flash(f'Fehler: {str(e)}', 'danger')
 
-    # Bei GET: Bewertungen für bestehende Teilnehmer sammeln
     existing_ratings = {}
     for participant in workshop_to_edit.participants:
         rating = db.session.query(workshop_participants.c.individual_rating).filter_by(
@@ -424,15 +487,17 @@ def edit_workshop(workshop_id):
                            existing_ratings=existing_ratings,
                            config=current_app.config)
 
-
 @bp.route('/workshop-dashboard', methods=['GET'])
 @login_required
-@role_required([ROLE_TEAMLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_ADMIN, ROLE_PROJEKTLEITER, ROLE_ABTEILUNGSLEITER])
+@role_required([ROLE_TEAMLEITER, ROLE_QM, ROLE_SALESCOACH, ROLE_TRAINER, ROLE_ADMIN, ROLE_BETRIEBSLEITER, ROLE_PROJEKTLEITER, ROLE_ABTEILUNGSLEITER])
 def workshop_dashboard():
     page = request.args.get('page', 1, type=int)
     period_arg = request.args.get('period', 'all')
+    project_filter = get_visible_project_id()
 
     workshops_query = Workshop.query
+    if project_filter:
+        workshops_query = workshops_query.filter(Workshop.project_id == project_filter)
 
     start_date, end_date = calculate_date_range(period_arg)
     if start_date:
@@ -455,6 +520,10 @@ def workshop_dashboard():
     for m in range(now.month, 0, -1):
         month_options.append({'value': f"{cy}-{m:02d}", 'text': f"{get_month_name_german(m)} {cy}"})
 
+    all_projects = None
+    if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
+        all_projects = Project.query.order_by(Project.name).all()
+
     return render_template('main/workshop_dashboard.html',
                            title='Workshop-Dashboard',
                            total_workshops=total_workshops,
@@ -463,10 +532,11 @@ def workshop_dashboard():
                            workshops_paginated=workshops_paginated,
                            current_period_filter=period_arg,
                            month_options=month_options,
+                           all_projects=all_projects,
+                           current_project_filter=project_filter,
                            config=current_app.config,
                            workshop_participants=workshop_participants,
                            db=db)
-
 
 @bp.route('/profile', methods=['GET', 'POST'])
 @login_required
@@ -482,14 +552,16 @@ def profile():
         return redirect(url_for('main.profile'))
     return render_template('main/profile.html', title='Profil', form=form, config=current_app.config)
 
-
 @bp.route('/coaching/<int:coaching_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_coaching(coaching_id):
     coaching_to_edit = Coaching.query.get_or_404(coaching_id)
 
-    if not (current_user.id == coaching_to_edit.coach_id or current_user.role == ROLE_ADMIN):
+    if not (current_user.id == coaching_to_edit.coach_id or current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]):
         flash('Sie haben keine Berechtigung, dieses Coaching zu bearbeiten.', 'danger')
+        abort(403)
+
+    if current_user.role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER] and current_user.project_id != coaching_to_edit.project_id:
         abort(403)
 
     if current_user.role == ROLE_TEAMLEITER:
@@ -497,12 +569,8 @@ def edit_coaching(coaching_id):
     else:
         user_team_ids = []
 
-    form = CoachingForm(
-        obj=coaching_to_edit,
-        current_user_role=current_user.role,
-        current_user_team_ids=user_team_ids
-    )
-    form.update_team_member_choices(exclude_archiv=False)
+    form = CoachingForm(obj=coaching_to_edit, current_user_role=current_user.role, current_user_team_ids=user_team_ids)
+    form.update_team_member_choices(exclude_archiv=False, project_id=coaching_to_edit.project_id)
 
     if form.validate_on_submit():
         try:
@@ -530,15 +598,18 @@ def edit_coaching(coaching_id):
                            tcap_js=tcap_js,
                            config=current_app.config)
 
-
 @bp.route('/coaching_review_dashboard', methods=['GET', 'POST'])
 @login_required
-@role_required([ROLE_PROJEKTLEITER, ROLE_QM, ROLE_ABTEILUNGSLEITER])
+@role_required([ROLE_PROJEKTLEITER, ROLE_QM, ROLE_ABTEILUNGSLEITER, ROLE_ADMIN, ROLE_BETRIEBSLEITER])
 def pl_qm_dashboard():
     page = request.args.get('page', 1, type=int)
     selected_team_id_filter_str = request.args.get('team_id_filter', None)
+    project_filter = get_visible_project_id()
 
     coachings_query = Coaching.query.join(TeamMember).join(Team).filter(Team.name != ARCHIV_TEAM_NAME)
+    if project_filter:
+        coachings_query = coachings_query.filter(Coaching.project_id == project_filter)
+
     coachings_paginated = coachings_query.order_by(desc(Coaching.coaching_date)).paginate(page=page, per_page=10, error_out=False)
     note_form = ProjectLeaderNoteForm()
     title = "Notizen Dashboard"
@@ -548,6 +619,8 @@ def pl_qm_dashboard():
         title = "Projektleiter Dashboard"
     elif current_user.role == ROLE_ABTEILUNGSLEITER:
         title = "Abteilungsleiter Dashboard"
+    elif current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
+        title = "Dashboard (Alle Projekte)"
 
     if request.method == 'POST' and 'submit_note' in request.form:
         form_val = ProjectLeaderNoteForm(request.form)
@@ -557,6 +630,9 @@ def pl_qm_dashboard():
         elif form_val.validate():
             try:
                 coaching = Coaching.query.get_or_404(int(coaching_id_str))
+                # Prüfen, ob Coaching im sichtbaren Projekt liegt
+                if current_user.role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER] and coaching.project_id != project_filter:
+                    abort(403)
                 coaching.project_leader_notes = form_val.notes.data
                 db.session.commit()
                 flash(f'Notiz für Coaching ID {coaching_id_str} gespeichert.', 'success')
@@ -571,8 +647,12 @@ def pl_qm_dashboard():
                                 page=request.args.get('page', 1, type=int),
                                 team_id_filter=selected_team_id_filter_str))
 
+    # Team-Statistiken (nur sichtbare Projekte)
     all_teams_data = []
-    for team_obj_stat_loop in Team.query.filter(Team.name != ARCHIV_TEAM_NAME).all():
+    teams_query = Team.query.filter(Team.name != ARCHIV_TEAM_NAME)
+    if project_filter:
+        teams_query = teams_query.filter(Team.project_id == project_filter)
+    for team_obj_stat_loop in teams_query.all():
         stats = db.session.query(
             func.coalesce(func.avg(Coaching.performance_mark * 10.0), 0).label('avg_perf'),
             func.coalesce(func.sum(Coaching.time_spent), 0).label('total_time'),
@@ -590,7 +670,7 @@ def pl_qm_dashboard():
     teams_c = [t for t in all_teams_data if t.get('num_coachings', 0) > 0]
     flop_3 = sorted(teams_c, key=lambda x: (x.get('avg_score', 0), -x.get('num_coachings', 0)))[:3] if teams_c else []
 
-    all_teams_for_filter_dropdown = Team.query.filter(Team.name != ARCHIV_TEAM_NAME).order_by(Team.name).all()
+    all_teams_for_filter_dropdown = teams_query.order_by(Team.name).all()
     selected_team_object_for_cards = None
     members_data_for_cards = []
 
@@ -598,6 +678,9 @@ def pl_qm_dashboard():
         selected_team_id = int(selected_team_id_filter_str)
         selected_team_object_for_cards = Team.query.get(selected_team_id)
         if selected_team_object_for_cards:
+            # Prüfen, ob Team im sichtbaren Projekt
+            if current_user.role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER] and selected_team_object_for_cards.project_id != project_filter:
+                abort(403)
             for member in selected_team_object_for_cards.members.all():
                 member_coachings_list = Coaching.query.filter_by(team_member_id=member.id).all()
                 avg_score_val = sum(c.overall_score for c in member_coachings_list) / len(member_coachings_list) if member_coachings_list else 0.0
@@ -630,7 +713,6 @@ def pl_qm_dashboard():
                            members_data_for_cards=members_data_for_cards,
                            config=current_app.config)
 
-
 @bp.route('/api/member_coaching_trend', methods=['GET'])
 @login_required
 def get_member_coaching_trend():
@@ -642,6 +724,11 @@ def get_member_coaching_trend():
         team_member_id = int(team_member_id_str)
     except ValueError:
         return jsonify({"error": "Invalid Team Member ID format"}), 400
+    # Prüfen, ob Teammitglied im sichtbaren Projekt liegt (optional)
+    member = TeamMember.query.get_or_404(team_member_id)
+    if current_user.role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER] and member.team.project_id != current_user.project_id:
+        return jsonify({"error": "Access denied"}), 403
+
     query = Coaching.query.filter_by(team_member_id=team_member_id).order_by(Coaching.coaching_date.desc())
     if count_str.lower() != 'all':
         try:
@@ -663,3 +750,14 @@ def get_member_coaching_trend():
         scores.append(coaching.overall_score if coaching.overall_score is not None else 0)
         dates.append(coaching.coaching_date.strftime('%d.%m.%y'))
     return jsonify({"labels": labels, "scores": scores, "dates": dates})
+
+# Optional: Route zum Setzen des aktiven Projekts (für Admins/Betriebsleiter)
+@bp.route('/set-project/<int:project_id>')
+@login_required
+def set_project(project_id):
+    if current_user.role not in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
+        abort(403)
+    project = Project.query.get_or_404(project_id)
+    session['active_project'] = project_id
+    flash(f'Aktives Projekt gewechselt zu {project.name}', 'success')
+    return redirect(request.referrer or url_for('main.index'))
