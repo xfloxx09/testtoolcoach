@@ -2,83 +2,222 @@
 
 {% block head_extra %}
 <style>
-    .participant-rating {
-        margin-top: 10px;
-        padding: 10px;
+    /* Gleiche Stile wie im Coaching-Formular */
+    .form-section {
         background-color: #2b2b2b;
+        border-radius: 8px;
+        padding: 20px;
+        margin-bottom: 25px;
+        border: 1px solid #444;
+    }
+    .section-title {
+        color: #e20074;
+        border-bottom: 2px solid #e20074;
+        padding-bottom: 10px;
+        margin-bottom: 20px;
+        font-weight: 600;
+        font-size: 1.3rem;
+    }
+    .section-title i {
+        margin-right: 10px;
+    }
+    .rating-slider {
+        width: 100%;
+        margin: 10px 0;
+    }
+    .rating-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #e20074;
+        text-align: center;
+        margin-top: 5px;
+    }
+    .rating-value span {
+        font-size: 1rem;
+        color: #aaa;
+    }
+    .time-spent-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+    .time-spent-wrapper input {
+        flex: 1;
+    }
+    .time-spent-unit {
+        font-size: 1.1rem;
+        color: #aaa;
+        min-width: 60px;
+    }
+
+    /* Teilnehmerauswahl als Team-gruppierte Checkboxen */
+    .team-group {
+        margin-bottom: 20px;
+        border-left: 3px solid #e20074;
+        padding-left: 15px;
+    }
+    .team-group h5 {
+        color: #fff;
+        margin-bottom: 10px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .team-group h5 i {
+        color: #e20074;
+    }
+    .member-checkbox {
+        background-color: #333;
         border-radius: 5px;
+        padding: 8px 12px;
+        margin-bottom: 5px;
+        transition: background-color 0.2s;
+    }
+    .member-checkbox:hover {
+        background-color: #3d3d3d;
+    }
+    .member-checkbox input[type="checkbox"] {
+        margin-right: 10px;
+        transform: scale(1.1);
+        accent-color: #e20074;
+    }
+    .member-checkbox label {
+        margin-bottom: 0;
+        cursor: pointer;
+        flex: 1;
+        color: #ddd;
+    }
+    .team-select-all {
+        margin-bottom: 10px;
+        font-size: 0.9rem;
+    }
+    .team-select-all label {
+        color: #aaa;
+        cursor: pointer;
+    }
+    .team-select-all input {
+        margin-right: 5px;
+        accent-color: #e20074;
+    }
+
+    /* Ursprüngliches Select-Feld ausblenden */
+    #team_member_ids {
+        display: none;
     }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container">
-    <h2>{{ title }}</h2>
+    <h2 class="mb-4"><i class="fas fa-users"></i> {{ title }}</h2>
 
-    <form method="POST" action="{% if is_edit_mode %}{{ url_for('admin.edit_workshop_entry', workshop_id=workshop.id) }}{% else %}{{ url_for('main.add_workshop') }}{% endif %}" novalidate>
+    <form method="POST" action="{% if is_edit_mode %}{{ url_for('main.edit_workshop', workshop_id=workshop.id) }}{% else %}{{ url_for('main.add_workshop') }}{% endif %}" novalidate>
         {{ form.hidden_tag() }}
 
-        <div class="form-group">
-            {{ form.title.label(class="form-control-label") }}
-            {{ form.title(class="form-control " + ("is-invalid" if form.title.errors else "")) }}
-            {% if form.title.errors %}
-                <div class="invalid-feedback">
-                    {% for error in form.title.errors %}<span>{{ error }}</span>{% endfor %}
-                </div>
-            {% endif %}
+        <!-- Abschnitt 1: Workshop-Thema -->
+        <div class="form-section">
+            <h4 class="section-title"><i class="fas fa-tag"></i> Workshop-Thema</h4>
+            <div class="form-group">
+                {{ form.title.label(class="form-control-label") }}
+                {{ form.title(class="form-control " + ("is-invalid" if form.title.errors else ""), placeholder="z.B. 'Einführung in agiles Arbeiten'") }}
+                {% if form.title.errors %}
+                    <div class="invalid-feedback">{% for error in form.title.errors %}{{ error }}{% endfor %}</div>
+                {% endif %}
+            </div>
         </div>
 
-        <div class="form-group">
-            {{ form.team_member_ids.label(class="form-control-label") }}
-            {{ form.team_member_ids(class="form-control custom-select " + ("is-invalid" if form.team_member_ids.errors else ""), multiple=True, size=8, id="participant-select") }}
-            <small class="form-text text-muted">Halte Strg (Ctrl) gedrückt, um mehrere Teilnehmer auszuwählen.</small>
+        <!-- Abschnitt 2: Teilnehmerauswahl (Team-gruppiert) -->
+        <div class="form-section">
+            <h4 class="section-title"><i class="fas fa-user-friends"></i> Teilnehmer</h4>
+            <p class="text-muted mb-3">Wählen Sie die Teilnehmer aus – mindestens zwei.</p>
+
+            <div id="participant-checkboxes">
+                {% set grouped = {} %}
+                {% for value, label in form.team_member_ids.choices %}
+                    {% set member_id = value %}
+                    {% set member_name = label.split(' (')[0] %}
+                    {% set team_name = label.split('(')[1].rstrip(')') if '(' in label else '' %}
+                    {% if team_name not in grouped %}
+                        {% set _ = grouped.update({team_name: []}) %}
+                    {% endif %}
+                    {% set _ = grouped[team_name].append((member_id, member_name)) %}
+                {% endfor %}
+
+                {% for team_name, members in grouped.items() %}
+                <div class="team-group">
+                    <h5><i class="fas fa-users"></i> {{ team_name }}</h5>
+                    <div class="team-select-all">
+                        <label>
+                            <input type="checkbox" class="select-all" data-team="{{ team_name }}"> Alle auswählen
+                        </label>
+                    </div>
+                    {% for member_id, member_name in members %}
+                    <div class="member-checkbox">
+                        <label>
+                            <input type="checkbox" name="participant_checkbox" value="{{ member_id }}" data-team="{{ team_name }}"
+                                   {% if is_edit_mode and member_id in existing_participant_ids %}checked{% endif %}>
+                            {{ member_name }}
+                        </label>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- Das ursprüngliche SelectMultiple-Feld (versteckt) -->
+            {{ form.team_member_ids(class="form-control", multiple=True) }}
             {% if form.team_member_ids.errors %}
-                <div class="invalid-feedback">
-                    {% for error in form.team_member_ids.errors %}<span>{{ error }}</span>{% endfor %}
-                </div>
+                <div class="invalid-feedback d-block">{% for error in form.team_member_ids.errors %}{{ error }}{% endfor %}</div>
             {% endif %}
         </div>
 
-        <div id="participant-ratings" class="mb-3">
-            <p class="text-muted">Bewertungen für ausgewählte Teilnehmer (0-10):</p>
-        </div>
-
-        <div class="form-row">
-            <div class="form-group col-md-6">
-                {{ form.overall_rating.label(class="form-control-label") }}
-                {{ form.overall_rating(class="form-control " + ("is-invalid" if form.overall_rating.errors else ""), placeholder="0-10") }}
-                {% if form.overall_rating.errors %}
-                    <div class="invalid-feedback">
-                        {% for error in form.overall_rating.errors %}<span>{{ error }}</span>{% endfor %}
-                    </div>
-                {% endif %}
-            </div>
-            <div class="form-group col-md-6">
-                {{ form.time_spent.label(class="form-control-label") }}
-                {{ form.time_spent(class="form-control " + ("is-invalid" if form.time_spent.errors else ""), placeholder="Minuten") }}
-                {% if form.time_spent.errors %}
-                    <div class="invalid-feedback">
-                        {% for error in form.time_spent.errors %}<span>{{ error }}</span>{% endfor %}
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="form-group">
-            {{ form.notes.label(class="form-control-label") }}
-            {{ form.notes(class="form-control " + ("is-invalid" if form.notes.errors else ""), rows=4, placeholder="Notizen zum Workshop...") }}
-            {% if form.notes.errors %}
-                <div class="invalid-feedback">
-                    {% for error in form.notes.errors %}<span>{{ error }}</span>{% endfor %}
+        <!-- Abschnitt 3: Bewertung & Zeitaufwand -->
+        <div class="form-section">
+            <h4 class="section-title"><i class="fas fa-star"></i> Bewertung & Zeitaufwand</h4>
+            <div class="form-row">
+                <div class="form-group col-md-6">
+                    {{ form.overall_rating.label(class="form-control-label") }}
+                    <input type="range" id="rating_slider" class="rating-slider" min="0" max="10" step="1" value="{{ form.overall_rating.data or 5 }}">
+                    <div class="rating-value"><span id="rating_display">{{ form.overall_rating.data or 5 }}</span> / 10</div>
+                    {{ form.overall_rating(class="form-control d-none", id="overall_rating_hidden") }}
+                    {% if form.overall_rating.errors %}
+                        <div class="invalid-feedback d-block">{% for error in form.overall_rating.errors %}{{ error }}{% endfor %}</div>
+                    {% endif %}
                 </div>
-            {% endif %}
+                <div class="form-group col-md-6">
+                    {{ form.time_spent.label(class="form-control-label") }}
+                    <div class="time-spent-wrapper">
+                        {{ form.time_spent(class="form-control " + ("is-invalid" if form.time_spent.errors else ""), id="time_spent_input") }}
+                        <span class="time-spent-unit">Minuten</span>
+                    </div>
+                    {% if form.time_spent.errors %}
+                        <div class="invalid-feedback d-block">{% for error in form.time_spent.errors %}{{ error }}{% endfor %}</div>
+                    {% endif %}
+                </div>
+            </div>
         </div>
 
-        <div class="form-group">
-            <button type="submit" class="btn telekom-button">
-                {% if is_edit_mode %}Workshop aktualisieren{% else %}Workshop speichern{% endif %}
+        <!-- Abschnitt 4: Notizen -->
+        <div class="form-section">
+            <h4 class="section-title"><i class="fas fa-pen"></i> Notizen</h4>
+            <div class="form-group">
+                {{ form.notes.label(class="form-control-label") }}
+                {{ form.notes(class="form-control " + ("is-invalid" if form.notes.errors else ""), rows=5, placeholder="Hier können Sie weitere Anmerkungen zum Workshop festhalten...") }}
+                {% if form.notes.errors %}
+                    <div class="invalid-feedback">{% for error in form.notes.errors %}{{ error }}{% endfor %}</div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="form-group text-center">
+            <button type="submit" class="btn telekom-button btn-lg px-5">
+                <i class="fas fa-save"></i> {% if is_edit_mode %}Workshop aktualisieren{% else %}Workshop speichern{% endif %}
             </button>
-            <a href="{% if is_edit_mode %}{{ url_for('admin.manage_workshops') }}{% else %}{{ url_for('main.workshop_dashboard') }}{% endif %}" class="btn btn-secondary ml-2">Abbrechen</a>
+            <a href="{% if is_edit_mode %}{{ url_for('main.workshop_dashboard') }}{% else %}{{ url_for('main.workshop_dashboard') }}{% endif %}" class="btn btn-secondary btn-lg ml-3 px-5">
+                <i class="fas fa-times"></i> Abbrechen
+            </a>
         </div>
     </form>
 </div>
@@ -88,38 +227,101 @@
 {{ super() }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const select = document.getElementById('participant-select');
-    const ratingsDiv = document.getElementById('participant-ratings');
-    
-    // Existierende Bewertungen aus der Datenbank (nur im Edit-Modus)
-    {% if is_edit_mode and existing_ratings %}
-        var existingRatings = {{ existing_ratings|tojson }};
-    {% else %}
-        var existingRatings = {};
-    {% endif %}
-
-    function updateRatings() {
-        const selectedOptions = Array.from(select.selectedOptions);
-        let html = '<p class="text-muted">Bewertungen für ausgewählte Teilnehmer (0-10):</p>';
-        selectedOptions.forEach(option => {
-            const memberId = option.value;
-            const memberName = option.text;
-            const existingValue = existingRatings[memberId] || '';
-            html += `
-                <div class="participant-rating">
-                    <label>${memberName}:</label>
-                    <input type="number" name="individual_rating_${memberId}" min="0" max="10" step="1" class="form-control" style="width: 100px; display: inline-block; margin-left: 10px;" value="${existingValue}" required>
-                </div>
-            `;
+    // --- 1. Bewertungs-Slider ---
+    const ratingSlider = document.getElementById('rating_slider');
+    const ratingHidden = document.getElementById('overall_rating_hidden');
+    const ratingDisplay = document.getElementById('rating_display');
+    if (ratingSlider && ratingHidden && ratingDisplay) {
+        ratingSlider.addEventListener('input', function() {
+            const val = this.value;
+            ratingHidden.value = val;
+            ratingDisplay.textContent = val;
         });
-        if (selectedOptions.length === 0) {
-            html = '<p class="text-muted">Bitte wählen Sie Teilnehmer aus.</p>';
+        // Initialwert setzen
+        if (ratingHidden.value) {
+            ratingSlider.value = ratingHidden.value;
+            ratingDisplay.textContent = ratingHidden.value;
+        } else {
+            ratingSlider.value = 5;
+            ratingHidden.value = 5;
+            ratingDisplay.textContent = 5;
         }
-        ratingsDiv.innerHTML = html;
     }
 
-    select.addEventListener('change', updateRatings);
-    updateRatings(); // Initial ausführen
+    // --- 2. Zeitaufwand (ganze Minuten) ---
+    const timeInput = document.getElementById('time_spent_input');
+    if (timeInput) {
+        timeInput.addEventListener('blur', function() {
+            let val = parseInt(this.value);
+            if (isNaN(val) || val < 1) val = 1;
+            this.value = val;
+        });
+    }
+
+    // --- 3. Teilnehmer-Checkboxen verwalten ---
+    const selectMultiple = document.getElementById('team_member_ids');
+    const checkboxes = document.querySelectorAll('input[name="participant_checkbox"]');
+    const selectAllCheckboxes = document.querySelectorAll('.select-all');
+
+    // Funktion: Ausgewählte IDs in das Select-Feld übertragen
+    function updateSelectedIds() {
+        const selectedIds = [];
+        checkboxes.forEach(cb => {
+            if (cb.checked) {
+                selectedIds.push(cb.value);
+            }
+        });
+        // Optionen im Select-Feld markieren
+        Array.from(selectMultiple.options).forEach(option => {
+            option.selected = selectedIds.includes(option.value);
+        });
+    }
+
+    // Checkbox-Änderungen überwachen
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', updateSelectedIds);
+    });
+
+    // "Alle auswählen" pro Team
+    selectAllCheckboxes.forEach(selectAll => {
+        selectAll.addEventListener('change', function() {
+            const team = this.dataset.team;
+            const teamCheckboxes = document.querySelectorAll(`input[name="participant_checkbox"][data-team="${team}"]`);
+            teamCheckboxes.forEach(cb => {
+                cb.checked = this.checked;
+            });
+            updateSelectedIds();
+        });
+    });
+
+    // Initial die Select-Feld-Optionen setzen (bei Bearbeitung)
+    updateSelectedIds();
+
+    // Optional: Wenn alle Checkboxen eines Teams manuell an- oder abgewählt werden, soll der "Alle auswählen"-Button entsprechend gesetzt werden.
+    checkboxes.forEach(cb => {
+        cb.addEventListener('change', function() {
+            const team = this.dataset.team;
+            const teamCheckboxes = document.querySelectorAll(`input[name="participant_checkbox"][data-team="${team}"]`);
+            const teamSelectAll = document.querySelector(`.select-all[data-team="${team}"]`);
+            if (teamSelectAll) {
+                const allChecked = Array.from(teamCheckboxes).every(cb => cb.checked);
+                teamSelectAll.checked = allChecked;
+            }
+        });
+    });
+
+    // Initial die "Alle auswählen"-Buttons setzen (bei Bearbeitung)
+    document.querySelectorAll('.team-group').forEach(group => {
+        const team = group.querySelector('.select-all')?.dataset.team;
+        if (team) {
+            const teamCheckboxes = document.querySelectorAll(`input[name="participant_checkbox"][data-team="${team}"]`);
+            const teamSelectAll = group.querySelector('.select-all');
+            if (teamCheckboxes.length > 0) {
+                const allChecked = Array.from(teamCheckboxes).every(cb => cb.checked);
+                teamSelectAll.checked = allChecked;
+            }
+        }
+    });
 });
 </script>
 {% endblock %}
