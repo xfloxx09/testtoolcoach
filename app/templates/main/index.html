@@ -8,6 +8,13 @@
 {% block content %}
     <h2>{{ title }}</h2>
 
+    {% set can_add_coaching_roles = ['Teamleiter', 'Qualitätsmanager', 'SalesCoach', 'Trainer', 'Admin'] %}
+    {% if current_user.role in can_add_coaching_roles %}
+        <div class="mb-3">
+            <a href="{{ url_for('main.add_coaching') }}" class="btn telekom-button">Neues Coaching hinzufügen</a>
+        </div>
+    {% endif %}
+
     <form method="GET" action="{{ url_for('main.coaching_dashboard') }}" id="filterForm" class="mb-4">
         <div class="form-row align-items-end">
             <div class="col-md-auto">
@@ -261,10 +268,7 @@
         <p class="text-center mt-3">Keine Coachings gefunden, die den aktuellen Filtern entsprechen.</p>
     {% endif %} 
 
-    {% set can_add_coaching_roles = ['Teamleiter', 'Qualitätsmanager', 'SalesCoach', 'Trainer', 'Admin'] %}
-    {% if current_user.role in can_add_coaching_roles %}
-        <a href="{{ url_for('main.add_coaching') }}" class="btn telekom-button mt-3">Neues Coaching hinzufügen</a>
-    {% endif %}
+    {# Der Button wurde nach oben verschoben – hier nicht mehr nötig #}
 
 {% endblock %}
 
