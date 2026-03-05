@@ -37,11 +37,8 @@
                         {{ form.team_id.label(class="form-control-label") }}
                         <select name="team_id" id="team_id" class="form-control custom-select" required>
                             <option value="">-- Team wählen --</option>
-                            {% for value, label in form.team_id.choices %}
-                                {% set team_id = value %}
-                                {% set team_name = label.split(' (')[0] %}
-                                {% set project_name = label.split('(')[1].rstrip(')') if '(' in label else '' %}
-                                <option value="{{ team_id }}" data-project="{{ project_name }}" {% if team_id == member.team_id %}selected{% endif %}>{{ label }}</option>
+                            {% for team in all_teams %}
+                                <option value="{{ team.id }}" data-project-id="{{ team.project_id }}" {% if team.id == member.team_id %}selected{% endif %}>{{ team.name }} ({{ team.project_ref.name }})</option>
                             {% endfor %}
                         </select>
                         {% if form.team_id.errors %}
@@ -68,28 +65,38 @@ document.addEventListener('DOMContentLoaded', function() {
     const teamOptions = Array.from(teamSelect.options).slice(1); // Alle außer dem ersten Placeholder
 
     function filterTeams() {
-        const selectedProject = projectFilter.value;
+        const selectedProjectId = projectFilter.value;
         teamOptions.forEach(option => {
-            const projectName = option.getAttribute('data-project');
-            if (!selectedProject) {
-                option.style.display = 'block';
+            const teamProjectId = option.getAttribute('data-project-id');
+            if (!selectedProjectId) {
+                option.style.display = 'none';
             } else {
-                const selectedProjectName = projectFilter.options[projectFilter.selectedIndex].text;
-                if (projectName === selectedProjectName) {
+                if (teamProjectId === selectedProjectId) {
                     option.style.display = 'block';
                 } else {
                     option.style.display = 'none';
                 }
             }
         });
-        // Falls die aktuell ausgewählte Option ausgeblendet wird, setze auf Placeholder
+
+        // Wenn die aktuell ausgewählte Option nicht zum gewählten Projekt gehört, setze auf Placeholder
         if (teamSelect.selectedOptions[0] && teamSelect.selectedOptions[0].style.display === 'none') {
             teamSelect.selectedIndex = 0;
         }
     }
 
+    // Initial: Wenn bereits ein Projekt ausgewählt ist (beim Bearbeiten), filtere sofort
+    if (projectFilter.value) {
+        filterTeams();
+        // Stelle sicher, dass die ausgewählte Option sichtbar ist
+        teamOptions.forEach(option => {
+            if (option.selected && option.getAttribute('data-project-id') === projectFilter.value) {
+                option.style.display = 'block';
+            }
+        });
+    }
+
     projectFilter.addEventListener('change', filterTeams);
-    filterTeams(); // Initial ausführen
 });
 </script>
 {% endblock %}
