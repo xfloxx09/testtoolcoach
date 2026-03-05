@@ -72,7 +72,8 @@ def panel():
     teams_paginated = teams_query.order_by(Team.name).paginate(page=page_teams, per_page=20, error_out=False)
 
     # --- Aktive Teammitglieder Query ---
-    members_query = TeamMember.query.join(Team).filter(Team.name != ARCHIV_TEAM_NAME)
+    # EXPLIZITER JOIN WEGEN MEHRDEUTIGKEIT (TeamMember hat zwei Fremdschlüssel auf teams)
+    members_query = TeamMember.query.join(Team, TeamMember.team_id == Team.id).filter(Team.name != ARCHIV_TEAM_NAME)
     if not member_filter_active:
         members_query = members_query.filter(false())
     else:
