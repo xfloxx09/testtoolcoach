@@ -21,7 +21,7 @@
                         {% endif %}
                     </div>
 
-                    <!-- Projektauswahl (nur zur Filterung, wird nicht im Formular gespeichert) -->
+                    <!-- Projektauswahl (nur zur Filterung) -->
                     <div class="form-group">
                         <label for="project_filter">Projekt</label>
                         <select class="form-control" id="project_filter">
@@ -37,8 +37,8 @@
                         {{ form.team_id.label(class="form-control-label") }}
                         <select name="team_id" id="team_id" class="form-control custom-select" required>
                             <option value="">-- Zuerst Projekt wählen --</option>
-                            {% for value, label in form.team_id.choices %}
-                                <option value="{{ value }}" data-project="{{ label.split('(')[-1].rstrip(')') }}" style="display: none;">{{ label }}</option>
+                            {% for team in all_teams %}
+                                <option value="{{ team.id }}" data-project-id="{{ team.project_id }}" style="display: none;">{{ team.name }} ({{ team.project_ref.name }})</option>
                             {% endfor %}
                         </select>
                         {% if form.team_id.errors %}
@@ -65,29 +65,20 @@ document.addEventListener('DOMContentLoaded', function() {
     const teamOptions = Array.from(teamSelect.options).slice(1); // Alle außer dem ersten Placeholder
 
     function filterTeams() {
-        const selectedProject = projectFilter.value;
+        const selectedProjectId = projectFilter.value;
         teamOptions.forEach(option => {
-            // Das Projekt steht in Klammern am Ende des Labels, z.B. "Team A (Projekt X)"
-            const projectName = option.text.split('(').pop().replace(')', '').trim();
-            // Wir müssen die Projekt-ID mit dem Projektnamen abgleichen – besser wäre, wir hätten eine data-project-id.
-            // Da wir das im Template nicht haben, nutzen wir den Namen. Alternativ könnten wir im Formular die Choices mit data-attributen versehen.
-            // Hier eine einfache Lösung: Wir zeigen alle Optionen, wenn kein Projekt gewählt ist, sonst filtern wir nach Namen.
-            // Problem: Projektnamen könnten doppelt vorkommen? Nein, Projektnamen sind unique.
-            if (!selectedProject) {
-                option.style.display = 'block';
+            const teamProjectId = option.getAttribute('data-project-id');
+            if (!selectedProjectId) {
+                option.style.display = 'none'; // Wenn kein Projekt gewählt, alle ausblenden
             } else {
-                // Wir müssen den Projektnamen aus der Option ermitteln. Der Name steht in Klammern.
-                const projectNameFromOption = option.text.split('(').pop().replace(')', '').trim();
-                // Das ausgewählte Projekt als Namen ermitteln
-                const selectedProjectName = projectFilter.options[projectFilter.selectedIndex].text;
-                if (projectNameFromOption === selectedProjectName) {
+                if (teamProjectId === selectedProjectId) {
                     option.style.display = 'block';
                 } else {
                     option.style.display = 'none';
                 }
             }
         });
-        // Placeholder-Option zurücksetzen
+        // Placeholder auswählen
         teamSelect.selectedIndex = 0;
     }
 
