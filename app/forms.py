@@ -163,6 +163,11 @@ class WorkshopForm(FlaskForm):
                 generated_choices.append((m.id, f"{m.name} ({m.team.name})"))
         self.team_member_ids.choices = generated_choices
 
+    def validate_team_member_ids(self, field):
+        """Stellt sicher, dass mindestens zwei Teilnehmer ausgewählt wurden."""
+        if len(field.data) < 2:
+            raise ValidationError('Es müssen mindestens zwei Teilnehmer ausgewählt werden.')
+
 class ProjectLeaderNoteForm(FlaskForm):
     notes = TextAreaField('PL/QM Notiz',
                           validators=[DataRequired("Die Notiz darf nicht leer sein."),
