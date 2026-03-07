@@ -102,7 +102,7 @@
 
 {% block content %}
 <h2>{{ title }}</h2>
-
+<!-- DEBUG: month_options = {{ month_options|length }} Einträge, project_filter = {{ current_project_filter }} -->
 <form method="GET" action="{{ url_for('main.coaching_dashboard') }}" id="filterForm" class="mb-4">
     <div class="form-row align-items-end">
         <div class="col-md-auto">
