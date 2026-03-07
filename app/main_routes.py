@@ -211,17 +211,21 @@ def coaching_dashboard():
 
     # --- Alle verfügbaren Monate aus den Coachings (für Filter) ---
     all_months_query = db.session.query(
-        func.date_trunc('month', Coaching.coaching_date).label('month')
-    ).filter(Coaching.project_id == project_filter).distinct().order_by(desc('month')).all()
+    func.date_trunc('month', Coaching.coaching_date).label('month'),
+    func.count(Coaching.id).label('count')
+).filter(Coaching.project_id == project_filter)\
+ .group_by('month')\
+ .order_by(desc('month')).all()
 
     month_options = []
-    for row in all_months_query:
-        dt = row.month
-        if dt:
-            month_options.append({
-                'value': dt.strftime('%Y-%m'),
-                'text': f"{get_month_name_german(dt.month)} {dt.year}"
-            })
+for row in all_months_query:
+    dt = row.month
+    if dt:
+        month_options.append({
+            'value': dt.strftime('%Y-%m'),
+            'text': f"{get_month_name_german(dt.month)} {dt.year}",
+            'count': row.count   # <-- Anzahl hinzufügen
+        })
 
     all_projects = None
     if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
