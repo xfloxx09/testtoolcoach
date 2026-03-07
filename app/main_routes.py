@@ -124,6 +124,7 @@ def coaching_dashboard():
     period_arg = request.args.get('period', 'all')
     team_arg = request.args.get('team', "all")
     search_arg = request.args.get('search', default="", type=str).strip()
+    member_filter = request.args.get('member_id', type=int)  # NEU
     project_filter = get_visible_project_id()
 
     # --- Globale Statistiken (mit allen Filtern) ---
@@ -131,6 +132,9 @@ def coaching_dashboard():
 
     if project_filter:
         global_base = global_base.filter(Coaching.project_id == project_filter)
+
+    if member_filter:   # NEU
+        global_base = global_base.filter(Coaching.team_member_id == member_filter)
 
     if team_arg and team_arg.isdigit():
         global_base = global_base.filter(Coaching.team_id == int(team_arg))
@@ -162,6 +166,9 @@ def coaching_dashboard():
 
     if project_filter:
         list_q = list_q.filter(Coaching.project_id == project_filter)
+
+    if member_filter:   # NEU
+        list_q = list_q.filter(Coaching.team_member_id == member_filter)
 
     ls_d, le_d = calculate_date_range(period_arg)
     if ls_d: list_q = list_q.filter(Coaching.coaching_date >= ls_d)
