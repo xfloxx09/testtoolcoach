@@ -787,6 +787,28 @@ def get_member_coaching_trend():
         dates.append(coaching.coaching_date.strftime('%d.%m.%y'))
     return jsonify({"labels": labels, "scores": scores, "dates": dates})
 
+# --- NEUE API-ROUTE FÜR MONATSKALENDER ---
+@bp.route('/api/coaching-months')
+@login_required
+def api_coaching_months():
+    """Liefert alle Monate mit Coaching-Anzahl für das aktuelle Projekt."""
+    project_filter = get_visible_project_id()
+    results = db.session.query(
+        func.date_trunc('month', Coaching.coaching_date).label('month'),
+        func.count(Coaching.id).label('count')
+    ).filter(Coaching.project_id == project_filter)\
+     .group_by('month')\
+     .order_by('month')\
+     .all()
+
+    data = [{
+        'month': r.month.strftime('%Y-%m'),
+        'label': f"{get_month_name_german(r.month.month)} {r.month.year}",
+        'count': r.count
+    } for r in results]
+
+    return jsonify(data)
+
 @bp.route('/set-project/<int:project_id>')
 @login_required
 def set_project(project_id):
