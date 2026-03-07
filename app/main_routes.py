@@ -210,12 +210,13 @@ def coaching_dashboard():
     all_teams_dd = all_teams_query.order_by(Team.name).all()
 
     # --- Alle verfügbaren Monate aus den Coachings (für Filter) ---
-    all_months_query = db.session.query(
+    query = db.session.query(
         func.date_trunc('month', Coaching.coaching_date).label('month'),
         func.count(Coaching.id).label('count')
-    ).filter(Coaching.project_id == project_filter)\
-     .group_by('month')\
-     .order_by(desc('month')).all()
+    )
+    if project_filter:
+        query = query.filter(Coaching.project_id == project_filter)
+    all_months_query = query.group_by('month').order_by(desc('month')).all()
 
     month_options = []
     for row in all_months_query:
@@ -547,12 +548,13 @@ def workshop_dashboard():
     workshops_paginated = workshops_query.order_by(desc(Workshop.workshop_date)).paginate(page=page, per_page=10, error_out=False)
 
     # --- Alle verfügbaren Monate aus den Workshops (für Filter) ---
-    all_months_query = db.session.query(
+    query = db.session.query(
         func.date_trunc('month', Workshop.workshop_date).label('month'),
         func.count(Workshop.id).label('count')
-    ).filter(Workshop.project_id == project_filter)\
-     .group_by('month')\
-     .order_by(desc('month')).all()
+    )
+    if project_filter:
+        query = query.filter(Workshop.project_id == project_filter)
+    all_months_query = query.group_by('month').order_by(desc('month')).all()
 
     month_options = []
     for row in all_months_query:
