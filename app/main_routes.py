@@ -124,7 +124,7 @@ def coaching_dashboard():
     period_arg = request.args.get('period', 'all')
     team_arg = request.args.get('team', "all")
     search_arg = request.args.get('search', default="", type=str).strip()
-    member_filter = request.args.get('member_id', type=int)  # NEU
+    member_filter = request.args.get('member_id', type=int)
     project_filter = get_visible_project_id()
 
     # --- Globale Statistiken (mit allen Filtern) ---
@@ -133,7 +133,7 @@ def coaching_dashboard():
     if project_filter:
         global_base = global_base.filter(Coaching.project_id == project_filter)
 
-    if member_filter:   # NEU
+    if member_filter:
         global_base = global_base.filter(Coaching.team_member_id == member_filter)
 
     if team_arg and team_arg.isdigit():
@@ -158,7 +158,7 @@ def coaching_dashboard():
     total_time = db.session.query(func.sum(Coaching.time_spent)).filter(Coaching.id.in_(filtered_ids_subquery)).scalar() or 0
     global_time_display = f"{total_time//60} Std. {total_time%60} Min. ({total_time} Min.)"
 
-    # --- Liste für Tabelle (wie bisher) ---
+    # --- Liste für Tabelle ---
     list_q = Coaching.query.join(TeamMember, Coaching.team_member_id == TeamMember.id)\
                            .join(Team, TeamMember.team_id == Team.id)\
                            .join(User, Coaching.coach_id == User.id, isouter=True)\
@@ -167,7 +167,7 @@ def coaching_dashboard():
     if project_filter:
         list_q = list_q.filter(Coaching.project_id == project_filter)
 
-    if member_filter:   # NEU
+    if member_filter:
         list_q = list_q.filter(Coaching.team_member_id == member_filter)
 
     ls_d, le_d = calculate_date_range(period_arg)
@@ -209,15 +209,19 @@ def coaching_dashboard():
         all_teams_query = all_teams_query.filter(Team.project_id == project_filter)
     all_teams_dd = all_teams_query.order_by(Team.name).all()
 
-    # --- Monatsoptionen ---
-    now = datetime.now(timezone.utc)
-    cy = now.year
-    py = cy - 1
-    m_opts = []
-    for m in range(12, 0, -1):
-        m_opts.append({'value': f"{py}-{m:02d}", 'text': f"{get_month_name_german(m)} {py}"})
-    for m in range(now.month, 0, -1):
-        m_opts.append({'value': f"{cy}-{m:02d}", 'text': f"{get_month_name_german(m)} {cy}"})
+    # --- Alle verfügbaren Monate aus den Coachings (für Filter) ---
+    all_months_query = db.session.query(
+        func.date_trunc('month', Coaching.coaching_date).label('month')
+    ).filter(Coaching.project_id == project_filter).distinct().order_by(desc('month')).all()
+
+    month_options = []
+    for row in all_months_query:
+        dt = row.month
+        if dt:
+            month_options.append({
+                'value': dt.strftime('%Y-%m'),
+                'text': f"{get_month_name_german(dt.month)} {dt.year}"
+            })
 
     all_projects = None
     if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
@@ -239,7 +243,7 @@ def coaching_dashboard():
                            current_search_term=search_arg,
                            global_total_coachings_count=global_total_coachings,
                            global_time_coached_display=global_time_display,
-                           month_options=m_opts,
+                           month_options=month_options,
                            all_projects=all_projects,
                            current_project_filter=project_filter,
                            config=current_app.config)
@@ -538,14 +542,19 @@ def workshop_dashboard():
 
     workshops_paginated = workshops_query.order_by(desc(Workshop.workshop_date)).paginate(page=page, per_page=10, error_out=False)
 
-    now = datetime.now(timezone.utc)
-    cy = now.year
-    py = cy - 1
+    # --- Alle verfügbaren Monate aus den Workshops (für Filter) ---
+    all_months_query = db.session.query(
+        func.date_trunc('month', Workshop.workshop_date).label('month')
+    ).filter(Workshop.project_id == project_filter).distinct().order_by(desc('month')).all()
+
     month_options = []
-    for m in range(12, 0, -1):
-        month_options.append({'value': f"{py}-{m:02d}", 'text': f"{get_month_name_german(m)} {py}"})
-    for m in range(now.month, 0, -1):
-        month_options.append({'value': f"{cy}-{m:02d}", 'text': f"{get_month_name_german(m)} {cy}"})
+    for row in all_months_query:
+        dt = row.month
+        if dt:
+            month_options.append({
+                'value': dt.strftime('%Y-%m'),
+                'text': f"{get_month_name_german(dt.month)} {dt.year}"
+            })
 
     all_projects = None
     if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
