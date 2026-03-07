@@ -229,12 +229,12 @@
                             </div>
                              
                              <div class="text-center details-link-container mt-auto d-flex justify-content-around align-items-center">
-                                 {# MODIFIED "Coachings" BUTTON BELOW #}
-                                 <a href="{{ url_for('main.index', search=member_stat.name, team=team.id if team else 'all', period='all') }}" class="btn btn-sm telekom-button-filled-magenta mr-1">
+                                 {# KORRIGIERTER "Coachings" BUTTON #}
+                                 <a href="{{ url_for('main.coaching_dashboard', member_id=member_stat.id) }}" class="btn btn-sm telekom-button-filled-magenta mr-1">
                                      Coachings
                                  </a>
                                  {# Trend Button #}
-                                 {% if member_stat.id and member_stat.total_coachings > 0 %} {# member_stat.id is TeamMember.id #}
+                                 {% if member_stat.id and member_stat.total_coachings > 0 %}
                                  <button class="btn btn-sm telekom-button-outline-secondary view-trend-btn ml-1" 
                                          data-member-id="{{ member_stat.id }}" 
                                          data-member-name="{{ member_stat.name }}"
