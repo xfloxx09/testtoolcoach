@@ -211,21 +211,21 @@ def coaching_dashboard():
 
     # --- Alle verfügbaren Monate aus den Coachings (für Filter) ---
     all_months_query = db.session.query(
-    func.date_trunc('month', Coaching.coaching_date).label('month'),
-    func.count(Coaching.id).label('count')
-).filter(Coaching.project_id == project_filter)\
- .group_by('month')\
- .order_by(desc('month')).all()
+        func.date_trunc('month', Coaching.coaching_date).label('month'),
+        func.count(Coaching.id).label('count')
+    ).filter(Coaching.project_id == project_filter)\
+     .group_by('month')\
+     .order_by(desc('month')).all()
 
     month_options = []
-for row in all_months_query:
-    dt = row.month
-    if dt:
-        month_options.append({
-            'value': dt.strftime('%Y-%m'),
-            'text': f"{get_month_name_german(dt.month)} {dt.year}",
-            'count': row.count   # <-- Anzahl hinzufügen
-        })
+    for row in all_months_query:
+        dt = row.month
+        if dt:
+            month_options.append({
+                'value': dt.strftime('%Y-%m'),
+                'text': f"{get_month_name_german(dt.month)} {dt.year}",
+                'count': row.count
+            })
 
     all_projects = None
     if current_user.role in [ROLE_ADMIN, ROLE_BETRIEBSLEITER]:
@@ -548,8 +548,11 @@ def workshop_dashboard():
 
     # --- Alle verfügbaren Monate aus den Workshops (für Filter) ---
     all_months_query = db.session.query(
-        func.date_trunc('month', Workshop.workshop_date).label('month')
-    ).filter(Workshop.project_id == project_filter).distinct().order_by(desc('month')).all()
+        func.date_trunc('month', Workshop.workshop_date).label('month'),
+        func.count(Workshop.id).label('count')
+    ).filter(Workshop.project_id == project_filter)\
+     .group_by('month')\
+     .order_by(desc('month')).all()
 
     month_options = []
     for row in all_months_query:
@@ -557,7 +560,8 @@ def workshop_dashboard():
         if dt:
             month_options.append({
                 'value': dt.strftime('%Y-%m'),
-                'text': f"{get_month_name_german(dt.month)} {dt.year}"
+                'text': f"{get_month_name_german(dt.month)} {dt.year}",
+                'count': row.count
             })
 
     all_projects = None
@@ -790,28 +794,6 @@ def get_member_coaching_trend():
         scores.append(coaching.overall_score if coaching.overall_score is not None else 0)
         dates.append(coaching.coaching_date.strftime('%d.%m.%y'))
     return jsonify({"labels": labels, "scores": scores, "dates": dates})
-
-# --- NEUE API-ROUTE FÜR MONATSKALENDER ---
-@bp.route('/api/coaching-months')
-@login_required
-def api_coaching_months():
-    """Liefert alle Monate mit Coaching-Anzahl für das aktuelle Projekt."""
-    project_filter = get_visible_project_id()
-    results = db.session.query(
-        func.date_trunc('month', Coaching.coaching_date).label('month'),
-        func.count(Coaching.id).label('count')
-    ).filter(Coaching.project_id == project_filter)\
-     .group_by('month')\
-     .order_by('month')\
-     .all()
-
-    data = [{
-        'month': r.month.strftime('%Y-%m'),
-        'label': f"{get_month_name_german(r.month.month)} {r.month.year}",
-        'count': r.count
-    } for r in results]
-
-    return jsonify(data)
 
 @bp.route('/set-project/<int:project_id>')
 @login_required
